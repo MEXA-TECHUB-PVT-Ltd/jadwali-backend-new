@@ -28,20 +28,24 @@ exports.create = async (req, res) => {
       profile_name || "",
     ]);
 
+    let profileData = {}
+
     if (profileCheckResult.rows.length > 0) {
       profileId = profileCheckResult.rows[0].id;
     } else {
       const profileInsertQuery = `
         INSERT INTO availability_profiles (user_id, profile_name)
         VALUES ($1, $2)
-        RETURNING id;
+        RETURNING *;
       `;
       const profileResult = await pool.query(profileInsertQuery, [
         user_id,
         profile_name,
       ]);
       profileId = profileResult.rows[0].id;
+      profileData = profileResult.rows[0];
     }
+    let insertedAvailabilities = [];
 
     // For each set of availabilities
     for (const day of days) {
@@ -53,7 +57,7 @@ exports.create = async (req, res) => {
       const availabilityInsertQuery = `
         INSERT INTO availability (profile_id, day_of_week, is_available)
         VALUES ($1, $2, $3)
-        RETURNING id;
+        RETURNING id, day_of_week, is_available;
       `;
       const availabilityResult = await pool.query(availabilityInsertQuery, [
         profileId,
@@ -61,6 +65,8 @@ exports.create = async (req, res) => {
         day.is_available,
       ]);
       const availabilityId = availabilityResult.rows[0].id;
+      let availabilityData = availabilityResult.rows[0];
+      availabilityData.time_slots = [];
 
       // Insert into time_slots table
       for (const slot of slots) {
@@ -73,12 +79,18 @@ exports.create = async (req, res) => {
           slot.start_time,
           slot.end_time,
         ]);
+        availabilityData.time_slots.push({
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+        });
       }
+      insertedAvailabilities.push(availabilityData);
     }
 
     res.status(201).json({
       status: true,
       message: "Availability created successfully",
+      result: { availability_profile: profileData, availabilities: insertedAvailabilities },
     });
   } catch (error) {
     console.error(error);
@@ -103,13 +115,14 @@ exports.update = async (req, res) => {
     }
 
     const profileCheckQuery = `
-      SELECT 1 FROM availability_profiles 
+      SELECT * FROM availability_profiles 
       WHERE user_id = $1 AND id = $2;
     `;
     const profileResult = await pool.query(profileCheckQuery, [
       user_id,
       profile_id,
     ]);
+    let updatedAvailabilities = [];
     if (profileResult.rowCount === 0) {
       return res
         .status(404)
@@ -127,7 +140,7 @@ exports.update = async (req, res) => {
         VALUES ($1, $2, $3)
         ON CONFLICT (profile_id, day_of_week) DO UPDATE
         SET is_available = EXCLUDED.is_available
-        RETURNING id;
+        RETURNING  id, day_of_week, is_available;
       `;
       const availabilityResult = await pool.query(availabilityUpsertQuery, [
         profile_id,
@@ -135,6 +148,8 @@ exports.update = async (req, res) => {
         day.is_available,
       ]);
       const availabilityId = availabilityResult.rows[0].id;
+      let availabilityData = availabilityResult.rows[0];
+      availabilityData.time_slots = [];
 
       // we delete all time slots and recreate them.
       // An alternative would be to update existing slots and only add/delete where necessary.
@@ -152,20 +167,25 @@ exports.update = async (req, res) => {
           slot.start_time,
           slot.end_time,
         ]);
+        availabilityData.time_slots.push({
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+        });
       }
+            updatedAvailabilities.push(availabilityData);
+
     }
 
     res.status(200).json({
       status: true,
       message: "Availability updated successfully",
+      result: { profile_availability: profileResult.rows[0], availability: updatedAvailabilities },
     });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ status: false, message: error.message });
   }
 };
-
-
 
 exports.getUserAvailability = async (req, res) => {
   const { user_id } = req.query;
@@ -249,7 +269,6 @@ exports.getUserAvailability = async (req, res) => {
   }
 };
 
-
 exports.getSpecificUserAvailability = async (req, res) => {
   const { user_id, profile_id } = req.query; // or req.body, depending on how you're receiving data
 
@@ -327,10 +346,8 @@ exports.getSpecificUserAvailability = async (req, res) => {
   }
 };
 
-
-
 exports.delete = async (req, res) => {
-  const { user_id, profile_id } = req.body; 
+  const { user_id, profile_id } = req.body;
 
   if (!user_id || !profile_id) {
     return res.status(400).json({

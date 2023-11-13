@@ -160,7 +160,7 @@ exports.signIn = async (req, res) => {
       if (checkUserExists.rowCount === 0) {
         return res.status(409).json({
           status: false,
-          message: "User already exists with this email",
+          message: "User not found",
         });
       }
       const isMatch = await bcrypt.compare(

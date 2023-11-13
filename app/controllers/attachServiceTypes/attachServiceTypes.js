@@ -140,12 +140,10 @@ exports.update = async (req, res) => {
       uniqueServiceTypeIds,
     ]);
     if (serviceTypeExists.rowCount !== uniqueServiceTypeIds.length) {
-      return res
-        .status(400)
-        .json({
-          status: false,
-          message: "One or more Service Types do not exist.",
-        });
+      return res.status(400).json({
+        status: false,
+        message: "One or more Service Types do not exist.",
+      });
     }
 
     await pool.query(
@@ -160,14 +158,23 @@ exports.update = async (req, res) => {
     const insertQuery = `
       INSERT INTO attach_service_type (service_type_id, user_id, service_id)
       VALUES ${insertValues}
-      RETURNING *
+      RETURNING service_type_id
     `;
 
-    const result = await pool.query(insertQuery);
+    const insertedResult = await pool.query(insertQuery);
+    const insertedIds = insertedResult.rows.map((row) => row.service_type_id);
+
+    const serviceTypeNamesQuery = `
+      SELECT * FROM service_type WHERE id = ANY($1::int[])
+    `;
+    const serviceTypeNamesResult = await pool.query(serviceTypeNamesQuery, [
+      insertedIds,
+    ]);
+
     res.status(200).json({
       status: true,
       message: "Service types updated successfully for user.",
-      result: result.rows,
+      service_types: serviceTypeNamesResult.rows,
     });
   } catch (error) {
     console.error(error);
@@ -177,6 +184,7 @@ exports.update = async (req, res) => {
     });
   }
 };
+
 
 exports.get = async (req, res) => {
   const { id } = req.params;

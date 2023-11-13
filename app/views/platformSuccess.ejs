@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connection Successful</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+        }
+        .message-container {
+            text-align: center;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            background-color: white;
+        }
+        .message-container h1 {
+            color: #4caf50;
+        }
+        .message-container p {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="message-container">
+        <% if (type === 'Zoom') { %>
+            <h1>Successfully Connected with Zoom!</h1>
+            <p>Your Zoom account has been successfully connected.</p>
+        <% } else if (type === 'Google') { %>
+            <h1>Successfully Connected with Google!</h1>
+            <p>Your Google account has been successfully connected.</p>
+        <% } %>
+    </div>
+</body>
+</html>
