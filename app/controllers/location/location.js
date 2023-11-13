@@ -30,7 +30,7 @@ exports.create = async (req, res) => {
         else if (type === "physical") { 
             if (!address || !post_code, !location) { 
                 return res.status(404).json({ status: false, message: "address, post_code, and  location are required!" });
-            }
+            } 
             
         }
 
