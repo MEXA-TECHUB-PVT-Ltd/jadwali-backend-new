@@ -1,5 +1,11 @@
 const { pool } = require("../../config/db.config");
 
+
+
+const checkGoogleToken = (user_id) => {
+
+}
+
 exports.create = async (req, res) => {
   const {
     address,
@@ -70,3 +76,5 @@ exports.create = async (req, res) => {
     return res.status(500).json({ status: false, message: error.message });
   }
 };
+
+
