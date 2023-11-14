@@ -333,7 +333,7 @@ exports.createDataRange = async (req, res) => {
     return res
       .status(400)
       .json({ status: false, message: "Invalid start_date or end_date" });
-  }
+  } 
 
   try {
     const updateQuery = `
