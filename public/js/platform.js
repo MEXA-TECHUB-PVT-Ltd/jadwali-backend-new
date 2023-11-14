@@ -6,27 +6,20 @@ document.addEventListener("DOMContentLoaded", () => {
     google: {
       image: "google.png",
       features: [
-        "Feature 1 for Google",
-        "Feature 2 for Google",
-        "Feature 3 for Google",
+        "Automatically create Google meetings at the time an event is scheduled.",
+        "Instantly share unique conferencing details upon confirmation.",
       ],
-      requirements: [
-        "Requirement 1 for Google",
-        "Requirement 2 for Google",
-        "Requirement 3 for Google",
-      ],
+      requirements: ["A Google account"],
     },
     zoom: {
       image: "zoom.png",
       features: [
-        "Feature 1 for Zoom",
-        "Feature 2 for Zoom",
-        "Feature 3 for Zoom",
+        "Automatically create Zoom meetings at the time an event is scheduled.",
+        "Instantly share unique conferencing details upon confirmation.",
       ],
       requirements: [
-        "Requirement 1 for Zoom",
-        "Requirement 2 for Zoom",
-        "Requirement 3 for Zoom",
+        "A Zoom account",
+        "Your Zoom account administrator must pre-approve Calendly in the Zoom Marketplace",
       ],
     },
   };

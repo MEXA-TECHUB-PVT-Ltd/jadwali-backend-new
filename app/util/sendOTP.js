@@ -7,19 +7,19 @@ const sendOtp = async (email, res, user_id) => {
 
   try {
     const update_otp_query = "UPDATE users SET otp = $1 WHERE id = $2";
-    const updateOtp = await pool.query(update_otp_query, [otp, user_id]);
+    await pool.query(update_otp_query, [otp, user_id]);
 
     console.log("Generated OTP: ", otp);
     const subject = "Verify Account";
     const htmlContent = "YOUR CODE IS " + otp;
 
-    sendEmail(email, subject, htmlContent, res);
+    return  sendEmail(email, subject, htmlContent, res);
   } catch (err) {
     console.log(err);
-    res.status(500).json({
-      message: err.message,
+    return {
       success: false,
-    });
+      message: err.message,
+    };
   }
 };
 

@@ -254,7 +254,11 @@ exports.forgotPassword = async (req, res) => {
     }
     const user_id = checkUserExists.rows[0].id;
 
-    sendOtp(email, res, user_id);
+    const emailResult = await sendOtp(email, res, user_id);
+
+    if (!emailResult.success) {
+      return res.status(500).json(emailResult);
+    }
 
     return res.status(200).json({
       status: true,
@@ -316,7 +320,6 @@ exports.verify_otp = async (req, res) => {
   }
 };
 
-
 exports.resetPassword = async (req, res) => {
   const { email, new_password } = req.body;
   try {
@@ -342,6 +345,299 @@ exports.resetPassword = async (req, res) => {
     res.json({
       status: true,
       message: "Password reset successfully!",
+      result: result.rows[0],
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.get = async (req, res) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res.status(400).json({
+      status: false,
+      message: "User ID is required",
+    });
+  }
+
+  try {
+    const userQuery = "SELECT * FROM users WHERE id = $1";
+    const userResult = await pool.query(userQuery, [id]);
+
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    const user = userResult.rows[0];
+    delete user.password;
+    delete user.otp;
+
+    return res.status(200).json({
+      status: true,
+      message: "User fetched successfully",
+      user,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.getAll = async (req, res) => {
+  const page = parseInt(req.query.page, 10) || 1; // Default to page 1 if not specified
+  const limit = parseInt(req.query.limit, 10) || 10; // Default to 10 items per page
+  const offset = (page - 1) * limit;
+
+  try {
+    // Count total users
+    const countQuery = "SELECT COUNT(*) FROM users";
+    const countResult = await pool.query(countQuery);
+    const totalUsers = parseInt(countResult.rows[0].count, 10);
+
+    // Query for users with pagination
+    const usersQuery = `
+      SELECT * FROM users WHERE role = 'user' AND deleted_at IS NULL
+      OFFSET $1 LIMIT $2
+    `;
+    const usersResult = await pool.query(usersQuery, [offset, limit]);
+
+    if (usersResult.rowCount === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No users found",
+      });
+    }
+
+    const users = usersResult.rows.map((user) => {
+      const { password, otp, ...userWithoutSensitiveData } = user;
+      return userWithoutSensitiveData;
+    });
+
+    const totalPages = Math.ceil(totalUsers / limit);
+
+    return res.status(200).json({
+      status: true,
+      message: "Users fetched successfully",
+      currentPage: page,
+      totalPages: totalPages,
+      totalUsers: totalUsers,
+      users,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.delete = async (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+
+  if (!userId) {
+    return res.status(400).json({
+      status: false,
+      message: "User ID is required",
+    });
+  }
+
+  try {
+    const userExists = await pool.query(
+      "SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL",
+      [userId]
+    );
+    if (userExists.rowCount === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found or already deleted",
+      });
+    }
+
+    await pool.query(
+      "UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1",
+      [userId]
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.deleteAll = async (req, res) => {
+  try {
+    const checkUsersQuery = "SELECT 1 FROM users WHERE deleted_at IS NULL";
+    const checkUsersResult = await pool.query(checkUsersQuery);
+
+    if (checkUsersResult.rowCount === 0) {
+      return res.status(400).json({
+        status: false,
+        message: "No users available to delete",
+      });
+    }
+
+    await pool.query(
+      "UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE deleted_at IS NULL"
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: "All users deleted successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.getRecentlyDeletedUsers = async (req, res) => {
+  const page = parseInt(req.query.page, 10) || 1; // Default to page 1 if not specified
+  const limit = parseInt(req.query.limit, 10) || 10; // Default to 10 items per page
+  const offset = (page - 1) * limit;
+  const currentTimestamp = "CURRENT_TIMESTAMP";
+
+  try {
+    const countQuery = `
+      SELECT COUNT(*)
+      FROM users
+      WHERE
+        deleted_at IS NOT NULL
+        AND deleted_at > (${currentTimestamp} - INTERVAL '90 days')
+    `;
+    const countResult = await pool.query(countQuery);
+    const totalUsers = parseInt(countResult.rows[0].count, 10);
+    const totalPages = Math.ceil(totalUsers / limit);
+
+    const deletedUsersQuery = `
+      SELECT
+        *,
+        EXTRACT(DAY FROM (${currentTimestamp} - deleted_at)) AS days_since_deleted,
+        90 - EXTRACT(DAY FROM (${currentTimestamp} - deleted_at)) AS remaining_days
+      FROM
+        users
+      WHERE
+        deleted_at IS NOT NULL
+        AND deleted_at > (${currentTimestamp} - INTERVAL '90 days')
+      ORDER BY
+        deleted_at DESC
+      OFFSET $1 LIMIT $2
+    `;
+    const deletedUsersResult = await pool.query(deletedUsersQuery, [
+      offset,
+      limit,
+    ]);
+
+    if (deletedUsersResult.rowCount === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No recently deleted users found within the last 90 days.",
+      });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Recently deleted users retrieved successfully.",
+      currentPage: page,
+      totalPages: totalPages,
+      totalUsers: totalUsers,
+      users: deletedUsersResult.rows,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.getByMonthCount = async (req, res) => {
+  try {
+    const query = `
+            SELECT
+                EXTRACT(MONTH FROM created_at) AS month,
+                COUNT(*) AS count
+            FROM
+                users
+            GROUP BY
+                month
+            ORDER BY
+                month;
+    `;
+
+    const result = await pool.query(query);
+
+    const monthCounts = result.rows.reduce((acc, row) => {
+      const monthName = new Date(0, row.month - 1).toLocaleString("en-US", {
+        month: "long",
+      });
+      acc[monthName] = row.count;
+      return acc;
+    }, {});
+
+    res.json({
+      status: true,
+      message: "User counts by month",
+      counts: monthCounts,
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.updateBlockStatus = async (req, res) => {
+  const { block_status, user_id } = req.body;
+  try {
+    if (block_status == null || !user_id) {
+      return res.status(401).json({
+        status: false,
+        message: "Please provide block_status and user_id",
+      });
+    }
+    if (block_status != true && block_status != false) {
+      return res.status(401).json({
+        status: false,
+        message: "Please provide valid block_status. [true or false]",
+      });
+    }
+    const query = `UPDATE users SET block_status = $1 WHERE id = $2 RETURNING*`;
+    const result = await pool.query(query, [block_status, user_id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No results found",
+      });
+    }
+    delete result.rows[0].password;
+    res.json({
+      status: true,
+      message: `User ${block_status ? "Block" : "Unblock"} Successfully!`,
       result: result.rows[0],
     });
   } catch (err) {
