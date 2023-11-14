@@ -100,6 +100,10 @@ CREATE TABLE IF NOT EXISTS events(
     description VARCHAR(255) NOT NULL,
     duration INT NOT NULL,
     one_to_one BOOLEAN NOT NULL DEFAULT FALSE,
+    date_range JSONB,
+    invite_in INT,
+    before_time INT, 
+    after_time INT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -117,9 +121,9 @@ CREATE TABLE IF NOT EXISTS locations(
 CREATE TABLE IF NOT EXISTS questions (
     id SERIAL PRIMARY KEY,
     event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    text TEXT NOT NULL,
-    type VARCHAR(50) NOT NULL,
+    text TEXT,
     options TEXT [],
+    type TEXT NOT NULL,
     is_required BOOLEAN DEFAULT FALSE,
     status BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW(),

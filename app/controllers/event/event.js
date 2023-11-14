@@ -1,4 +1,5 @@
 const { pool } = require("../../config/db.config");
+const moment = require("moment");
 
 // Function to check if user exists
 const userExist = async (user_id) => {
@@ -21,7 +22,7 @@ const eventExist = async (event_id) => {
   const query = "SELECT 1 FROM events WHERE id = $1";
   const result = await pool.query(query, [event_id]);
   return result.rowCount > 0;
-}
+};
 
 // Function to create an event
 exports.create = async (req, res) => {
@@ -53,12 +54,10 @@ exports.create = async (req, res) => {
 
     const duplicatedEvents = await duplicatedEvent(name, user_id);
     if (duplicatedEvents) {
-      return res
-        .status(409)
-        .json({
-          status: false,
-          message: "Event is already created with this name",
-        });
+      return res.status(409).json({
+        status: false,
+        message: "Event is already created with this name",
+      });
     }
     const insertQuery =
       "INSERT INTO events (user_id, name, event_price, deposit_price, description, duration, one_to_one) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *";
@@ -156,7 +155,7 @@ exports.update = async (req, res) => {
     updateValues.push(event_id);
 
     // Execute the update query
-      const result = await pool.query(updateQuery, updateValues);
+    const result = await pool.query(updateQuery, updateValues);
 
     // Return success response
     return res.status(200).json({
@@ -169,8 +168,6 @@ exports.update = async (req, res) => {
     return res.status(500).json({ status: false, message: error.message });
   }
 };
-
-
 
 exports.getAllUserEvents = async (req, res) => {
   const { id } = req.params;
@@ -207,9 +204,8 @@ exports.getAllUserEvents = async (req, res) => {
   }
 };
 
-
 exports.getUserSpecificEvent = async (req, res) => {
-  const { user_id, event_id } = req.query; 
+  const { user_id, event_id } = req.query;
 
   // Validate input
   if (!user_id || !event_id) {
@@ -244,11 +240,8 @@ exports.getUserSpecificEvent = async (req, res) => {
   }
 };
 
-
-
-
 exports.delete = async (req, res) => {
-  const { event_id, user_id } = req.query; 
+  const { event_id, user_id } = req.query;
 
   if (!event_id || !user_id) {
     return res.status(400).json({
@@ -281,8 +274,6 @@ exports.delete = async (req, res) => {
   }
 };
 
-
-
 exports.deleteAllUserEvents = async (req, res) => {
   const { id } = req.params; // assuming id is passed as a URL parameter
 
@@ -314,5 +305,77 @@ exports.deleteAllUserEvents = async (req, res) => {
       status: false,
       message: error.message,
     });
+  }
+};
+
+/**
+ * TODO:
+ * Update the event table to store the event data
+ * data range, invite_in, before and after meeting time
+ * DATES CONFIGURATION:  ISO 8601 Format with Time Zone Information
+ */
+
+exports.createDataRange = async (req, res) => {
+  const { event_id, date_range, invite_in, before_time, after_time } = req.body;
+
+  if (!event_id || !date_range || !before_time || !after_time) {
+    return res.status(400).json({
+      status: false,
+      message:
+        "event_id, date_range, invite_in, before_time, after_time are required",
+    });
+  }
+
+  const { start_date, end_date } = date_range;
+
+  // Basic date validation
+  if (!moment(start_date).isValid() || !moment(end_date).isValid()) {
+    return res
+      .status(400)
+      .json({ status: false, message: "Invalid start_date or end_date" });
+  }
+
+  try {
+    const updateQuery = `
+      UPDATE events 
+      SET date_range = $1, invite_in = $2, before_time = $3, after_time = $4, updated_at = NOW() 
+      WHERE id = $5
+      RETURNING *;
+    `;
+    const result = await pool.query(updateQuery, [
+      date_range,
+      invite_in,
+      before_time,
+      after_time,
+      event_id,
+    ]);
+
+    if (result.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ status: false, message: "Event not found" });
+    }
+
+    const user_id = result.rows[0].user_id;
+
+    const findUserQuery = await pool.query(
+      "SELECT * FROM users WHERE id = $1",
+      [user_id]
+    );
+
+    const google_access_token = findUserQuery.rows[0].google_access_token;
+    const google_refresh_token = findUserQuery.rows[0].google_refresh_token;
+    const google_expiry_at = findUserQuery.rows[0].google_expiry_at;
+
+    console.log(google_access_token, google_refresh_token, google_expiry_at);
+
+    return res.status(200).json({
+      status: true,
+      message: "Event updated successfully",
+      event: result.rows[0],
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ status: false, message: error.message });
   }
 };
