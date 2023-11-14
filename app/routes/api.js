@@ -11,6 +11,7 @@ const attachServiceTypes = require("./attachServiceTypes/attachServiceTypes");
 const event = require("./event/event");
 const location = require("./location/location");
 const platform = require("./platform/platform");
+const questions = require("./questions/questions");
 
 
 router.use("/users", users);
@@ -22,6 +23,7 @@ router.use("/attachServiceTypes", attachServiceTypes);
 router.use("/event", event);
 router.use("/location", location);
 router.use("/platform", platform);
+router.use("/questions", questions);
 
 
 module.exports = router;

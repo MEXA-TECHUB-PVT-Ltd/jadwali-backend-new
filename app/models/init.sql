@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users(
     zoom_access_token TEXT DEFAULT NULL,
     zoom_refresh_token TEXT DEFAULT NULL,
     zoom_expiry_at timestamp with time zone,
+    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -107,9 +108,20 @@ CREATE TABLE IF NOT EXISTS locations(
     event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     address TEXT,
     post_code TEXT,
-    location TEXT,
+    location JSONB,
     type TEXT,
     platform_name TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS questions (
+    id SERIAL PRIMARY KEY,
+    event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    options TEXT [],
+    is_required BOOLEAN DEFAULT FALSE,
+    status BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
