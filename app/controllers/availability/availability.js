@@ -1,6 +1,9 @@
 const { pool } = require("../../config/db.config");
 const { checkUserExists } = require("../../util/genericDBFunc");
 
+
+
+
 exports.create = async (req, res) => {
   const { user_id, profile_name, days } = req.body;
 
@@ -401,3 +404,6 @@ exports.delete = async (req, res) => {
     return res.status(500).json({ status: false, message: error.message });
   }
 };
+
+
+// for strict checking --> check if the is_available is false then time slots must be empty in the db
