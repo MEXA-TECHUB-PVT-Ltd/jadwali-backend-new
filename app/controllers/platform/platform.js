@@ -21,6 +21,11 @@ function getOauth2Client() {
 exports.get = async (req, res) => {
   const { type } = req.params;
   const { user_id } = req.query;
+  if (!user_id) {
+    return res
+      .status(400)
+      .json({ status: false, message: "user_id is required" });
+  }
   res.render(
     path.join(__dirname, "..", "..", "..", "app", "views", "platform.ejs"),
     {
@@ -187,7 +192,6 @@ exports.redirectZoom = async (req, res) => {
         type: "Zoom",
       }
     );
-
   } catch (error) {
     console.error("Error connecting to Zoom:", error);
     res.status(500).send("Failed to connect to Zoom");

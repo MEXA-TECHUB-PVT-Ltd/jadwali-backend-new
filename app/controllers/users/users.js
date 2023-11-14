@@ -34,19 +34,27 @@ exports.create = async (req, res) => {
         message: "Full name, email, and password are required for email signup",
       });
     }
+    if (
+      (signup_type === "google" ||
+      signup_type === "apple" ||
+      signup_type === "facebook") && !email
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "email is required for google, facebook and apple signup",
+      });
+    }
 
     // Only proceed with the email check if signup_type is email
-    if (signup_type === "email") {
-      const checkUserExists = await pool.query(
-        "SELECT 1 FROM users WHERE email = $1",
-        [email]
-      );
-      if (checkUserExists.rowCount > 0) {
-        return res.status(409).json({
-          status: false,
-          message: "User already exists with this email",
-        });
-      }
+    const checkUserExists = await pool.query(
+      "SELECT 1 FROM users WHERE email = $1",
+      [email]
+    );
+    if (checkUserExists.rowCount > 0) {
+      return res.status(409).json({
+        status: false,
+        message: "User already exists with this email",
+      });
     }
 
     switch (signup_type) {
@@ -54,7 +62,7 @@ exports.create = async (req, res) => {
         // Insert email user logic
         const hashedPassword = await bcrypt.hash(password, 8);
         insertQuery =
-          "INSERT INTO users (full_name, email, password, role, signup_type) VALUES ($1, $2, $3, $4, $5) RETURNING id";
+          "INSERT INTO users (full_name, email, password, role, signup_type) VALUES ($1, $2, $3, $4, $5) RETURNING *";
         insertValues = [
           full_name,
           email,
@@ -70,9 +78,16 @@ exports.create = async (req, res) => {
             message: "Google access token is required",
           });
         }
+
         insertQuery =
-          "INSERT INTO users (google_access_token, role, signup_type) VALUES ($1, $2, $3) RETURNING id";
-        insertValues = [google_access_token, userRole, signup_type];
+          "INSERT INTO users (full_name, email, google_access_token, role, signup_type) VALUES ($1, $2, $3, $4, $5) RETURNING *";
+        insertValues = [
+          full_name,
+          email,
+          google_access_token,
+          userRole,
+          signup_type,
+        ];
         break;
       case "facebook":
         if (!facebook_access_token) {
@@ -82,8 +97,14 @@ exports.create = async (req, res) => {
           });
         }
         insertQuery =
-          "INSERT INTO users (facebook_access_token, role, signup_type) VALUES ($1, $2, $3) RETURNING id";
-        insertValues = [facebook_access_token, userRole, signup_type];
+          "INSERT INTO users (full_name, email,facebook_access_token, role, signup_type) VALUES ($1, $2, $3, $4, $5) RETURNING *";
+        insertValues = [
+          full_name,
+          email,
+          facebook_access_token,
+          userRole,
+          signup_type,
+        ];
         break;
       case "apple":
         if (!apple_access_token) {
@@ -93,8 +114,14 @@ exports.create = async (req, res) => {
           });
         }
         insertQuery =
-          "INSERT INTO users (apple_access_token, role, signup_type) VALUES ($1, $2, $3) RETURNING id";
-        insertValues = [apple_access_token, userRole, signup_type];
+          "INSERT INTO users (full_name, email, apple_access_token, role, signup_type) VALUES ($1, $2, $3, $4, $5) RETURNING *";
+        insertValues = [
+          full_name,
+          email,
+          apple_access_token,
+          userRole,
+          signup_type,
+        ];
         break;
       default:
         return res.status(400).json({
@@ -106,27 +133,24 @@ exports.create = async (req, res) => {
     const newUser = await pool.query(insertQuery, insertValues);
     userId = newUser.rows[0].id;
 
+    delete newUser.rows[0].password;
+    delete newUser.rows[0].otp;
+
     const response = {
       status: true,
       message: "User created successfully",
-      result: {
-        user: {
-          id: userId,
-          role: userRole,
-          signup_type,
-        },
-      },
+      result: newUser.rows[0]
     };
 
-    if (signup_type === "email") {
+    // if (signup_type === "email") {
       const token = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
         expiresIn: 86400, // 24 hours
       });
 
-      response.result.user.full_name = full_name;
-      response.result.user.email = email;
+      // response.result.user.full_name = full_name;
+      // response.result.user.email = email;
       response.result.token = token;
-    }
+    // }
 
     return res.status(201).json(response);
   } catch (error) {
@@ -190,7 +214,7 @@ exports.signIn = async (req, res) => {
         result: checkUserExists.rows[0],
         token: token,
       });
-    } else if (type === "google" || type === "fb" || type === "apple") {
+    } else if (type === "google" || type === "facebook" || type === "apple") {
       if (!token) {
         return res
           .status(400)

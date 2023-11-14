@@ -264,7 +264,7 @@ exports.getUserAvailability = async (req, res) => {
       status: true,
       message: "User availabilities retrieved successfully",
       totalCount: totalProfiles,
-      data: userAvailabilities,
+      result: userAvailabilities,
     });
   } catch (error) {
     console.error(error);
