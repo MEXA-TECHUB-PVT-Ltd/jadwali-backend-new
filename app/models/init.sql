@@ -15,9 +15,13 @@ CREATE TABLE IF NOT EXISTS users(
     payment TEXT DEFAULT FALSE,
     block_status BOOLEAN DEFAULT FALSE,
     google_access_token TEXT DEFAULT NULL,
+    google_refresh_token TEXT DEFAULT NULL,
+    google_expiry_at timestamp with time zone,
     facebook_access_token TEXT DEFAULT NULL,
     apple_access_token TEXT DEFAULT NULL,
     zoom_access_token TEXT DEFAULT NULL,
+    zoom_refresh_token TEXT DEFAULT NULL,
+    zoom_expiry_at timestamp with time zone,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Google Auth Test</title>
+  </head>
+  <body>
+
+    <a href="http://localhost:3025/platform?type=zoom">Connect to Zoom</a>
+    <a href="http://localhost:3025/platform?type=google">Connect to Google</a>
+    <!-- <h1>Google OAuth Test</h1>
+    <a href="http://localhost:3025/google/login">Login with Google</a>
+    <a href="http://localhost:3025/connect-zoom">Login with ZOOM</a>
+
+    <br />
+    <br />
+    <button id="sign-up-button">SIGN UP WITH GOOGLE</button>
+    <br />
+    <br />
+    <a href="/skype/login">SIGN IN WITH SKYPE</a> -->
+
+    <script>
+      const signUP = document.getElementById("sign-up-button");
+
+      const body = {
+        signup_type: "google",
+        role: "user",
+        referralLink: null,
+      };
+
+      console.log(body);
+
+      signUP.addEventListener("click", async () => {
+        try {
+          const response = await fetch("/users/create", {
+            method: "POST",
+            body: body,
+          });
+
+          const data = await response.json();
+        } catch (error) {
+          console.log(error);
+        }
+      });
+    </script>
+  </body>
+</html>

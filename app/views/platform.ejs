@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/public/css/index.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <title>Zoom Card</title>
+  </head>
+  <body>
+    <div class="card light-box-shadow">
+      <div class="flex">
+        <div class="right-border">
+          <img src="/public/images/fvicon-01.png" alt="JADWALI" width="50px" />
+        </div>
+        <div>
+          <img class="img" src="" alt="ZOOM" width="60px" />
+        </div>
+      </div>
+      <div class="content-section">
+        <h2>Features that save you time:</h2>
+        <ul class="features-list" id="features-list"></ul>
+        <h3>Requirements</h3>
+        <ul class="requirements-list" id="requirements-list"></ul>
+      </div>
+      <% if (platformType === 'google') { %>
+      <a
+        href="http://localhost:3025/api/platform/connect-google?user_id=<%= user_id %>"
+        >Connect Google</a
+      >
+      <% } else if (platformType === 'zoom') { %>
+      <a href="http://localhost:3025/api/platform/connect-zoom?user_id=<%= user_id %>">Connect Zoom</a>
+      <% } %>
+    </div>
+    <script src="/public/js/platform.js"></script>
+    <script>
+      window.platformType = "<%= platformType %>";
+    </script>
+  </body>
+</html>
