@@ -102,9 +102,9 @@ CREATE TABLE IF NOT EXISTS events(
     one_to_one BOOLEAN NOT NULL DEFAULT FALSE,
     date_range JSONB,
     invite_in INT,
-    before_time INT, 
+    before_time INT,
     after_time INT,
-    selected_avail_id INT,
+    selected_avail_id INT REFERENCES availability_profiles(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -127,6 +127,26 @@ CREATE TABLE IF NOT EXISTS questions (
     type TEXT NOT NULL,
     is_required BOOLEAN DEFAULT FALSE,
     status BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS schedule (
+    id SERIAL PRIMARY KEY,
+    event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    scheduling_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    cancellation_reason TEXT,
+    status VARCHAR(50) DEFAULT 'pending',
+    -- can be pending, confirmed, cancelled
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS question_responses (
+    id SERIAL PRIMARY KEY,
+    schedule_id INT NOT NULL REFERENCES schedule(id) ON DELETE CASCADE,
+    question_id INT NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    text TEXT,
+    options TEXT [],
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
