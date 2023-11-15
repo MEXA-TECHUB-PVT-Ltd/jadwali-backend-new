@@ -1,6 +1,11 @@
 const { pool } = require("../../config/db.config");
 const moment = require("moment");
+const { refreshGoogleAccessToken } = require("../../lib/refreshTokens");
+const {
+  postDateRangeToGoogleCalendar,
+} = require("../../lib/integrateCalendar");
 
+// TODO: Checks for creating more than 6 events and one to one and one to many events
 // Function to check if user exists
 const userExist = async (user_id) => {
   const base_query = "SELECT 1 FROM users WHERE id = $1";
@@ -18,9 +23,22 @@ const duplicatedEvent = async (name, user_id) => {
   return duplicateCheckResult.rowCount > 0;
 };
 
+const getUserEventCount = async (user_id) => {
+  const query = "SELECT COUNT(*) FROM events WHERE user_id = $1";
+  const values = [user_id];
+  const result = await pool.query(query, values);
+  return parseInt(result.rows[0].count);
+};
+
 const eventExist = async (event_id) => {
   const query = "SELECT 1 FROM events WHERE id = $1";
   const result = await pool.query(query, [event_id]);
+  return result.rowCount > 0;
+};
+
+const availabilityExist = async (id) => {
+  const query = "SELECT 1 FROM availability_profiles WHERE id = $1";
+  const result = await pool.query(query, [id]);
   return result.rowCount > 0;
 };
 
@@ -50,6 +68,14 @@ exports.create = async (req, res) => {
       return res
         .status(404)
         .json({ status: false, message: "User does not exist" });
+    }
+
+    const eventCount = await getUserEventCount(user_id);
+    if (eventCount >= 6) {
+      return res.status(400).json({
+        status: false,
+        message: "Cannot create more than 6 events per user",
+      });
     }
 
     const duplicatedEvents = await duplicatedEvent(name, user_id);
@@ -333,7 +359,7 @@ exports.createDataRange = async (req, res) => {
     return res
       .status(400)
       .json({ status: false, message: "Invalid start_date or end_date" });
-  } 
+  }
 
   try {
     const updateQuery = `
@@ -356,24 +382,77 @@ exports.createDataRange = async (req, res) => {
         .json({ status: false, message: "Event not found" });
     }
 
-    const user_id = result.rows[0].user_id;
+    // TODO: ADD below code to schedule event
 
-    const findUserQuery = await pool.query(
-      "SELECT * FROM users WHERE id = $1",
-      [user_id]
-    );
+    // const user_id = result.rows[0].user_id;
 
-    const google_access_token = findUserQuery.rows[0].google_access_token;
-    const google_refresh_token = findUserQuery.rows[0].google_refresh_token;
-    const google_expiry_at = findUserQuery.rows[0].google_expiry_at;
+    // const findUserQuery = await pool.query(
+    //   "SELECT * FROM users WHERE id = $1",
+    //   [user_id]
+    // );
 
-    console.log(google_access_token, google_refresh_token, google_expiry_at);
+    // const google_access_token = findUserQuery.rows[0].google_access_token;
+    // const google_refresh_token = findUserQuery.rows[0].google_refresh_token;
+    // const google_expiry_at = findUserQuery.rows[0].google_expiry_at;
+
+    // await refreshGoogleAccessToken(user_id);
+
+    // const calendarResponse = await postDateRangeToGoogleCalendar(
+    //   google_access_token,
+    //   null,
+    //   start_date,
+    //   end_date,
+    //   "Event Title"
+    // );
 
     return res.status(200).json({
       status: true,
       message: "Event updated successfully",
       event: result.rows[0],
     });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+exports.createAvailability = async (req, res) => {
+  const { event_id, availability_id } = req.body;
+
+  if (!event_id || !availability_id) {
+    return res
+      .status(400)
+      .json({
+        status: false,
+        message: "event_id and availability_id are required",
+      });
+  }
+
+  try {
+    const eventExists = await eventExist(event_id);
+    if (!eventExists) {
+      return res
+        .status(404)
+        .json({ status: false, message: "Event does not exist" });
+    }
+    const availabilityExists = await availabilityExist(availability_id);
+    if (!availabilityExists) {
+      return res
+        .status(404)
+        .json({ status: false, message: "Availability does not exist" });
+    }
+
+    const updateQuery = `
+      UPDATE events 
+      SET selected_avail_id = $1, updated_at = NOW() 
+      WHERE id = $2
+      RETURNING *;
+    `;
+    const result = await pool.query(updateQuery, [availability_id, event_id]);
+
+    return res
+      .status(200)
+      .json({ status: true, message: "Availability exists", result: result.rows[0] });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ status: false, message: error.message });

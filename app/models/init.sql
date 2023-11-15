@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS events(
     invite_in INT,
     before_time INT, 
     after_time INT,
+    selected_avail_id INT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
