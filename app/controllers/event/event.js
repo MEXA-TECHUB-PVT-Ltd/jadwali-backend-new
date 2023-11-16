@@ -374,7 +374,7 @@ exports.createDataRange = async (req, res) => {
       before_time,
       after_time,
       event_id,
-    ]);
+    ]); 
 
     if (result.rowCount === 0) {
       return res
