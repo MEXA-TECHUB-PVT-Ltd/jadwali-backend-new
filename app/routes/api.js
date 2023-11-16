@@ -12,6 +12,7 @@ const event = require("./event/event");
 const location = require("./location/location");
 const platform = require("./platform/platform");
 const questions = require("./questions/questions");
+const schedule = require("./schedule/schedule");
 
 
 router.use("/users", users);
@@ -24,6 +25,7 @@ router.use("/event", event);
 router.use("/location", location);
 router.use("/platform", platform);
 router.use("/questions", questions);
+router.use("/schedule", schedule);
 
 
 module.exports = router;

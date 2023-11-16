@@ -1,6 +1,7 @@
 const { pool } = require("../../config/db.config");
 
 // TODO: check for event exists or not
+// TODO: allow invitee | others option | type name for accessing the name efficiently
 const eventExist = async (event_id) => {
   const base_query = "SELECT 1 FROM events WHERE id = $1";
   const exist = await pool.query(base_query, [event_id]);
@@ -27,6 +28,7 @@ exports.create = async (req, res) => {
     // Handle different types of questions
     switch (type) {
       case "oneline":
+      case "email":
       case "number":
       case "multipleLine":
         return await handleTextTypeQuestion(
@@ -43,6 +45,7 @@ exports.create = async (req, res) => {
         return await handleOptionsTypeQuestion(
           event_id,
           type,
+          text,
           options,
           is_required,
           status,
@@ -91,6 +94,7 @@ async function handleTextTypeQuestion(
 async function handleOptionsTypeQuestion(
   event_id,
   type,
+  text,
   options,
   is_required,
   status,
@@ -104,10 +108,11 @@ async function handleOptionsTypeQuestion(
     });
   }
 
-  const query = `INSERT INTO questions (event_id, type, options, is_required, status) VALUES ($1, $2, $3, $4, $5) RETURNING *`;
+  const query = `INSERT INTO questions (event_id, type, text, options, is_required, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`;
   const result = await pool.query(query, [
     event_id,
     type,
+    text,
     options,
     is_required,
     status,
@@ -160,6 +165,7 @@ exports.update = async (req, res) => {
     switch (type) {
       case "oneline":
       case "number":
+      case "email":
       case "multipleLine":
         return await handleTextTypeQuestionUpdate(
           question_id,
@@ -177,6 +183,7 @@ exports.update = async (req, res) => {
           question_id,
           event_id,
           type,
+          text,
           options,
           is_required,
           status,
@@ -229,6 +236,7 @@ async function handleOptionsTypeQuestionUpdate(
   id,
   event_id,
   type,
+  text,
   options,
   is_required,
   status,
@@ -249,7 +257,7 @@ async function handleOptionsTypeQuestionUpdate(
     options,
     is_required,
     status,
-    null,
+    text,
     id,
   ]);
   return res.status(200).json({
