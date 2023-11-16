@@ -344,11 +344,10 @@ exports.deleteAllUserEvents = async (req, res) => {
 exports.createDataRange = async (req, res) => {
   const { event_id, date_range, invite_in, before_time, after_time } = req.body;
 
-  if (!event_id ) {
+  if (!event_id) {
     return res.status(400).json({
       status: false,
-      message:
-        "event_id is required",
+      message: "event_id is required",
     });
   }
 
@@ -374,7 +373,7 @@ exports.createDataRange = async (req, res) => {
       before_time,
       after_time,
       event_id,
-    ]); 
+    ]);
 
     if (result.rowCount === 0) {
       return res
@@ -471,33 +470,39 @@ exports.getAllEventData = async (req, res) => {
 
   try {
     const query = `
-      SELECT 
-          e.*,
-          json_agg(
-              json_build_object(
-                  'id', l.id,
-                  'address', l.address,
-                  'post_code', l.post_code,
-                  'location', l.location,
-                  'type', l.type,
-                  'platform_name', l.platform_name,
-                  'created_at', l.created_at,
-                  'updated_at', l.updated_at
-              )
-          ) FILTER (WHERE l.id IS NOT NULL) AS locations,
-          json_agg(
-              json_build_object(
-                  'id', q.id,
-                  'text', q.text,
-                  'options', q.options,
-                  'type', q.type,
-                  'is_required', q.is_required,
-                  'status', q.status,
-                  'created_at', q.created_at,
-                  'updated_at', q.updated_at
-              )
-          ) FILTER (WHERE q.id IS NOT NULL) AS questions,
-    json_agg(
+SELECT 
+    e.*,
+    (SELECT json_agg(
+        json_build_object(
+            'id', l.id,
+            'address', l.address,
+            'post_code', l.post_code,
+            'location', l.location,
+            'type', l.type,
+            'platform_name', l.platform_name,
+            'created_at', l.created_at,
+            'updated_at', l.updated_at
+        )
+    )
+    FROM locations l
+    WHERE l.event_id = e.id) AS locations,
+
+    (SELECT json_agg(
+        json_build_object(
+            'id', q.id,
+            'text', q.text,
+            'options', q.options,
+            'type', q.type,
+            'is_required', q.is_required,
+            'status', q.status,
+            'created_at', q.created_at,
+            'updated_at', q.updated_at
+        )
+    )
+    FROM questions q
+    WHERE q.event_id = e.id) AS questions,
+
+    (SELECT json_agg(
         json_build_object(
             'id', ap.id,
             'profile_name', ap.profile_name,
@@ -528,16 +533,26 @@ exports.getAllEventData = async (req, res) => {
                 WHERE a.profile_id = ap.id
             )
         )
-    ) FILTER (WHERE ap.id IS NOT NULL) AS availability_profiles
-      FROM 
-          events e
-      LEFT JOIN locations l ON e.id = l.event_id
-      LEFT JOIN questions q ON e.id = q.event_id
-      LEFT JOIN availability_profiles ap ON e.selected_avail_id = ap.id
-      WHERE e.id = $1
-      GROUP BY e.id;
+    )
+    FROM availability_profiles ap
+    WHERE ap.id = e.selected_avail_id) AS availability_profiles
+
+FROM 
+    events e
+WHERE e.id = $1;
+
     `;
     const result = await pool.query(query, [id]);
+
+    
+const user_id = result.rows[0].user_id
+
+    const getUser = await pool.query(
+      "SELECT full_name, email FROM users WHERE id = $1",
+      [user_id]
+    );
+
+
 
     if (result.rowCount === 0) {
       return res.status(404).json({
@@ -549,6 +564,7 @@ exports.getAllEventData = async (req, res) => {
     return res.status(200).json({
       status: true,
       message: "Event data fetched successfully",
+      user: getUser.rows[0],
       result: result.rows[0],
     });
   } catch (error) {

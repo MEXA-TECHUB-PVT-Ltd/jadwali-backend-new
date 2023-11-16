@@ -24,6 +24,7 @@
     "googleapis": "^128.0.0",
     "jsonwebtoken": "^9.0.2",
     "moment": "^2.29.4",
+    "moment-timezone": "^0.5.43",
     "nodemailer": "^6.9.7",
     "passport-apple": "^2.0.2",
     "passport-facebook-token": "^4.0.0",
