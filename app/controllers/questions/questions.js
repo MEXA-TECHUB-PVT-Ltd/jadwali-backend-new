@@ -30,6 +30,7 @@ exports.create = async (req, res) => {
       case "oneline":
       case "email":
       case "number":
+      case "name":
       case "multipleLine":
         return await handleTextTypeQuestion(
           event_id,
