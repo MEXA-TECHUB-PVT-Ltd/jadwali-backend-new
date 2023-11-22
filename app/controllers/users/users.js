@@ -214,23 +214,44 @@ exports.signIn = async (req, res) => {
         result: checkUserExists.rows[0],
         token: token,
       });
-    } else if (type === "google" || type === "facebook" || type === "apple") {
-      if (!token) {
-        return res
-          .status(400)
-          .json({ status: false, message: `${type} access token is required` });
+    } else if (["google", "facebook", "apple"].includes(type)) {
+      let checkUserExists;
+      if (token) {
+        // Attempt to authenticate using the token
+        const tokenField = `${type}_access_token`;
+        checkUserExists = await pool.query(
+          `SELECT * FROM users WHERE ${tokenField} = $1`,
+          [token]
+        );
+        if (checkUserExists.rowCount === 0 && !email) {
+          // Token is invalid and no email provided
+          return res.status(401).json({
+            status: false,
+            message: `Invalid ${type} access token and no email provided for fallback.`,
+          });
+        }
       }
-      const tokenField = `${type}_access_token`; // Field name in the database
-      const checkUserExists = await pool.query(
-        `SELECT * FROM users WHERE ${tokenField} = $1`,
-        [token]
-      );
 
-      if (checkUserExists.rowCount === 0) {
-        return res.status(401).json({
-          status: false,
-          message: `Invalid ${type} access token`,
-        });
+      // Fallback to email authentication if token is not valid or not provided
+      if (!checkUserExists || checkUserExists.rowCount === 0) {
+        if (!email) {
+          return res
+            .status(400)
+            .json({
+              status: false,
+              message: "Email is required for fallback authentication",
+            });
+        }
+        checkUserExists = await pool.query(
+          "SELECT * FROM users WHERE email = $1",
+          [email]
+        );
+        if (checkUserExists.rowCount === 0) {
+          return res.status(409).json({
+            status: false,
+            message: "User not found",
+          });
+        }
       }
 
       const userToken = jwt.sign(
@@ -417,24 +438,32 @@ exports.get = async (req, res) => {
     });
   }
 };
-
 exports.getAll = async (req, res) => {
-  const page = parseInt(req.query.page, 10) || 1; // Default to page 1 if not specified
-  const limit = parseInt(req.query.limit, 10) || 10; // Default to 10 items per page
-  const offset = (page - 1) * limit;
+  const page = parseInt(req.query.page, 10);
+  const limit = parseInt(req.query.limit, 10);
 
   try {
     // Count total users
-    const countQuery = "SELECT COUNT(*) FROM users";
+    const countQuery =
+      "SELECT COUNT(*) FROM users WHERE role = 'user' AND deleted_at IS NULL";
     const countResult = await pool.query(countQuery);
     const totalUsers = parseInt(countResult.rows[0].count, 10);
 
-    // Query for users with pagination
-    const usersQuery = `
-      SELECT * FROM users WHERE role = 'user' AND deleted_at IS NULL
-      OFFSET $1 LIMIT $2
-    `;
-    const usersResult = await pool.query(usersQuery, [offset, limit]);
+    // If page and limit are provided, use pagination, otherwise fetch all users
+    let usersQuery;
+    let usersResult;
+    if (!isNaN(page) && !isNaN(limit)) {
+      const offset = (page - 1) * limit;
+      usersQuery = `
+        SELECT * FROM users WHERE role = 'user' AND deleted_at IS NULL
+        OFFSET $1 LIMIT $2
+      `;
+      usersResult = await pool.query(usersQuery, [offset, limit]);
+    } else {
+      usersQuery =
+        "SELECT * FROM users WHERE role = 'user' AND deleted_at IS NULL";
+      usersResult = await pool.query(usersQuery);
+    }
 
     if (usersResult.rowCount === 0) {
       return res.status(404).json({
@@ -448,12 +477,12 @@ exports.getAll = async (req, res) => {
       return userWithoutSensitiveData;
     });
 
-    const totalPages = Math.ceil(totalUsers / limit);
+    const totalPages = limit ? Math.ceil(totalUsers / limit) : 1;
 
     return res.status(200).json({
       status: true,
       message: "Users fetched successfully",
-      currentPage: page,
+      currentPage: page || 1,
       totalPages: totalPages,
       totalUsers: totalUsers,
       users,
@@ -466,6 +495,7 @@ exports.getAll = async (req, res) => {
     });
   }
 };
+
 
 exports.delete = async (req, res) => {
   const userId = parseInt(req.params.id, 10);
