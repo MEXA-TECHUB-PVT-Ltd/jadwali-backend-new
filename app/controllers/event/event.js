@@ -78,13 +78,13 @@ exports.create = async (req, res) => {
       });
     }
 
-    const duplicatedEvents = await duplicatedEvent(name, user_id);
-    if (duplicatedEvents) {
-      return res.status(409).json({
-        status: false,
-        message: "Event is already created with this name",
-      });
-    }
+    // const duplicatedEvents = await duplicatedEvent(name, user_id);
+    // if (duplicatedEvents) {
+    //   return res.status(409).json({
+    //     status: false,
+    //     message: "Event is already created with this name",
+    //   });
+    // }
     const insertQuery =
       "INSERT INTO events (user_id, name, event_price, deposit_price, description, duration, one_to_one) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *";
     const values = [
@@ -341,68 +341,132 @@ exports.deleteAllUserEvents = async (req, res) => {
  * DATES CONFIGURATION:  ISO 8601 Format with Time Zone Information
  */
 
-exports.createDataRange = async (req, res) => {
-  const { event_id, date_range, invite_in, before_time, after_time } = req.body;
 
-  if (!event_id) {
+exports.createDataRange = async (req, res) => {
+  const {
+    event_id,
+    type,
+    into_future,
+    custom_date_range,
+    availableDays,
+    book_leading_time,
+    before_time,
+    after_time,
+  } = req.body;
+
+  if (!event_id || !type) {
     return res.status(400).json({
       status: false,
-      message: "event_id is required",
+      message: "event_id and type are required",
     });
   }
 
-  const { start_date, end_date } = date_range;
+  const VALID_TYPES = ["FUTURE", "CUSTOM", "AVAILABLE_DAYS"];
 
-  // Basic date validation
-  if (!moment(start_date).isValid() || !moment(end_date).isValid()) {
-    return res
-      .status(400)
-      .json({ status: false, message: "Invalid start_date or end_date" });
+  if (!VALID_TYPES.includes(type)) {
+    return res.status(400).json({ status: false, message: "Invalid type" });
   }
 
   try {
-    const updateQuery = `
-      UPDATE events 
-      SET date_range = $1, invite_in = $2, before_time = $3, after_time = $4, updated_at = NOW() 
-      WHERE id = $5
-      RETURNING *;
-    `;
-    const result = await pool.query(updateQuery, [
-      date_range,
-      invite_in,
-      before_time,
-      after_time,
-      event_id,
-    ]);
-
-    if (result.rowCount === 0) {
+    // Check if the event exists
+    const eventCheckResult = await pool.query(
+      "SELECT id FROM events WHERE id = $1",
+      [event_id]
+    );
+    if (eventCheckResult.rowCount === 0) {
       return res
         .status(404)
         .json({ status: false, message: "Event not found" });
     }
 
-    // TODO: ADD below code to schedule event
+    let query;
+    let queryParams;
 
-    // const user_id = result.rows[0].user_id;
+    if (type === "CUSTOM") {
+      if (
+        !custom_date_range ||
+        !custom_date_range.start_date ||
+        !custom_date_range.end_date
+      ) {
+        return res.status(400).json({
+          status: false,
+          message:
+            "custom_date_range with start_date and end_date is required for CUSTOM type",
+        });
+      }
+      if (
+        !moment(custom_date_range.start_date).isValid() ||
+        !moment(custom_date_range.end_date).isValid()
+      ) {
+        return res
+          .status(400)
+          .json({
+            status: false,
+            message: "Invalid start_date or end_date in custom_date_range",
+          });
+      }
+      query = `
+        UPDATE events 
+        SET date_range = $1, book_leading_time = $2, before_time = $3, after_time = $4, updated_at = NOW() 
+        WHERE id = $5
+        RETURNING *;
+      `;
+      queryParams = [
+        custom_date_range,
+        book_leading_time,
+        before_time,
+        after_time,
+        event_id,
+      ];
+    } else if (type === "FUTURE") {
+      if (typeof into_future !== "boolean") {
+        return res.status(400).json({
+          status: false,
+          message: "into_future boolean is required for FUTURE type",
+        });
+      }
+      query = `
+        UPDATE events 
+        SET into_future = $1, book_leading_time = $2, before_time = $3, after_time = $4, updated_at = NOW() 
+        WHERE id = $5
+        RETURNING *;
+      `;
+      queryParams = [
+        into_future,
+        book_leading_time,
+        before_time,
+        after_time,
+        event_id,
+      ];
+    } else if (type === "AVAILABLE_DAYS") {
+      if (!availableDays) {
+        return res.status(400).json({
+          status: false,
+          message: "availableDays is required for AVAILABLE_DAYS type",
+        });
+      }
+      query = `
+        UPDATE events 
+        SET availableDays = $1, book_leading_time = $2, before_time = $3, after_time = $4, updated_at = NOW() 
+        WHERE id = $5
+        RETURNING *;
+      `;
+      queryParams = [
+        availableDays,
+        book_leading_time,
+        before_time,
+        after_time,
+        event_id,
+      ];
+    }
 
-    // const findUserQuery = await pool.query(
-    //   "SELECT * FROM users WHERE id = $1",
-    //   [user_id]
-    // );
+    const result = await pool.query(query, queryParams);
 
-    // const google_access_token = findUserQuery.rows[0].google_access_token;
-    // const google_refresh_token = findUserQuery.rows[0].google_refresh_token;
-    // const google_expiry_at = findUserQuery.rows[0].google_expiry_at;
-
-    // await refreshGoogleAccessToken(user_id);
-
-    // const calendarResponse = await postDateRangeToGoogleCalendar(
-    //   google_access_token,
-    //   null,
-    //   start_date,
-    //   end_date,
-    //   "Event Title"
-    // );
+    if (result.rowCount === 0) {
+      return res
+        .status(400)
+        .json({ status: false, message: "Event update failed" });
+    }
 
     return res.status(200).json({
       status: true,
@@ -414,6 +478,7 @@ exports.createDataRange = async (req, res) => {
     return res.status(500).json({ status: false, message: error.message });
   }
 };
+
 
 exports.createAvailability = async (req, res) => {
   const { event_id, availability_id } = req.body;
@@ -544,15 +609,12 @@ WHERE e.id = $1;
     `;
     const result = await pool.query(query, [id]);
 
-    
-const user_id = result.rows[0].user_id
+    const user_id = result.rows[0].user_id;
 
     const getUser = await pool.query(
       "SELECT full_name, email FROM users WHERE id = $1",
       [user_id]
     );
-
-
 
     if (result.rowCount === 0) {
       return res.status(404).json({

@@ -100,7 +100,14 @@ CREATE TABLE IF NOT EXISTS events(
     description VARCHAR(255) NOT NULL,
     duration INT NOT NULL,
     one_to_one BOOLEAN NOT NULL DEFAULT FALSE,
+    invite_in_type TEXT,
+    -- custom date range | into future | availableDays
     date_range JSONB,
+    into_future BOOLEAN DEFAULT FALSE,
+    availableDays JSONB,
+    -- { number of days: 60, preference: 'Working days' | 'Calendar days'}
+    book_leading_time INT,
+    -- the leading time in which user can schedule a event | like if 2 hours selected then user must schedule event before 2 hours
     invite_in INT,
     before_time INT,
     after_time INT,
