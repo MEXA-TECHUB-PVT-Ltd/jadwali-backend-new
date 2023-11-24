@@ -13,6 +13,7 @@ const location = require("./location/location");
 const platform = require("./platform/platform");
 const questions = require("./questions/questions");
 const schedule = require("./schedule/schedule");
+const cancel = require("./cancel/cancel");
 
 
 router.use("/users", users);
@@ -26,6 +27,7 @@ router.use("/location", location);
 router.use("/platform", platform);
 router.use("/questions", questions);
 router.use("/schedule", schedule);
+router.use("/cancel", cancel);
 
 
 module.exports = router;

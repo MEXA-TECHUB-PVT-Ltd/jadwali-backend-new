@@ -292,7 +292,7 @@ exports.get = async (req, res) => {
         "r.text AS response_text, r.options AS response_options, r.created_at AS response_created_at, r.updated_at AS response_updated_at " +
         "FROM questions q " +
         "LEFT JOIN question_responses r ON q.id = r.question_id " +
-        "WHERE q.event_id = $1 AND (r.schedule_id = $2 OR r.schedule_id IS NULL)",
+        "WHERE q.event_id = $1 AND (r.schedule_id = $2 OR r.schedule_id IS NULL) ORDER BY q.id",
       [scheduledEvents.event_id, id]
     );
 

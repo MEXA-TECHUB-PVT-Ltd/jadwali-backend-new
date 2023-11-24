@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS questions (
     type TEXT NOT NULL,
     is_required BOOLEAN DEFAULT FALSE,
     status BOOLEAN DEFAULT FALSE,
+    others BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );

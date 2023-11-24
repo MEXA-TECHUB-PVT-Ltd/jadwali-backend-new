@@ -341,7 +341,6 @@ exports.deleteAllUserEvents = async (req, res) => {
  * DATES CONFIGURATION:  ISO 8601 Format with Time Zone Information
  */
 
-
 exports.createDataRange = async (req, res) => {
   const {
     event_id,
@@ -354,10 +353,10 @@ exports.createDataRange = async (req, res) => {
     after_time,
   } = req.body;
 
-  if (!event_id || !type) {
+  if (!event_id) {
     return res.status(400).json({
       status: false,
-      message: "event_id and type are required",
+      message: "event_id are required",
     });
   }
 
@@ -379,86 +378,24 @@ exports.createDataRange = async (req, res) => {
         .json({ status: false, message: "Event not found" });
     }
 
+    
+
     let query;
     let queryParams;
-
-    if (type === "CUSTOM") {
-      if (
-        !custom_date_range ||
-        !custom_date_range.start_date ||
-        !custom_date_range.end_date
-      ) {
-        return res.status(400).json({
-          status: false,
-          message:
-            "custom_date_range with start_date and end_date is required for CUSTOM type",
-        });
-      }
-      if (
-        !moment(custom_date_range.start_date).isValid() ||
-        !moment(custom_date_range.end_date).isValid()
-      ) {
-        return res
-          .status(400)
-          .json({
-            status: false,
-            message: "Invalid start_date or end_date in custom_date_range",
-          });
-      }
       query = `
         UPDATE events 
-        SET date_range = $1, book_leading_time = $2, before_time = $3, after_time = $4, updated_at = NOW() 
-        WHERE id = $5
+        SET invite_in_type = $1, book_leading_time = $2, before_time = $3, after_time = $4, date_range = $5, updated_at = NOW() 
+        WHERE id = $6
         RETURNING *;
       `;
       queryParams = [
+        type,
+        book_leading_time,
+        before_time,
+        after_time,
         custom_date_range,
-        book_leading_time,
-        before_time,
-        after_time,
         event_id,
       ];
-    } else if (type === "FUTURE") {
-      if (typeof into_future !== "boolean") {
-        return res.status(400).json({
-          status: false,
-          message: "into_future boolean is required for FUTURE type",
-        });
-      }
-      query = `
-        UPDATE events 
-        SET into_future = $1, book_leading_time = $2, before_time = $3, after_time = $4, updated_at = NOW() 
-        WHERE id = $5
-        RETURNING *;
-      `;
-      queryParams = [
-        into_future,
-        book_leading_time,
-        before_time,
-        after_time,
-        event_id,
-      ];
-    } else if (type === "AVAILABLE_DAYS") {
-      if (!availableDays) {
-        return res.status(400).json({
-          status: false,
-          message: "availableDays is required for AVAILABLE_DAYS type",
-        });
-      }
-      query = `
-        UPDATE events 
-        SET availableDays = $1, book_leading_time = $2, before_time = $3, after_time = $4, updated_at = NOW() 
-        WHERE id = $5
-        RETURNING *;
-      `;
-      queryParams = [
-        availableDays,
-        book_leading_time,
-        before_time,
-        after_time,
-        event_id,
-      ];
-    }
 
     const result = await pool.query(query, queryParams);
 
@@ -478,7 +415,6 @@ exports.createDataRange = async (req, res) => {
     return res.status(500).json({ status: false, message: error.message });
   }
 };
-
 
 exports.createAvailability = async (req, res) => {
   const { event_id, availability_id } = req.body;
@@ -552,20 +488,23 @@ SELECT
     FROM locations l
     WHERE l.event_id = e.id) AS locations,
 
-    (SELECT json_agg(
-        json_build_object(
-            'id', q.id,
-            'text', q.text,
-            'options', q.options,
-            'type', q.type,
-            'is_required', q.is_required,
-            'status', q.status,
-            'created_at', q.created_at,
-            'updated_at', q.updated_at
-        )
-    )
-    FROM questions q
-    WHERE q.event_id = e.id) AS questions,
+(SELECT json_agg(
+    json_build_object(
+        'id', q.id,
+        'text', q.text,
+        'options', q.options,
+        'type', q.type,
+        'is_required', q.is_required,
+        'status', q.status,
+        'others', q.others,
+        'created_at', q.created_at,
+        'updated_at', q.updated_at
+    ) ORDER BY q.id
+)
+FROM questions q
+WHERE q.event_id = e.id) AS questions,
+
+
 
     (SELECT json_agg(
         json_build_object(

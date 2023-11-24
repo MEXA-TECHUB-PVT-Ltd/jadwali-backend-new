@@ -8,7 +8,7 @@ const eventExist = async (event_id) => {
   return exist.rowCount === 0;
 };
 exports.create = async (req, res) => {
-  const { event_id, text, type, options, is_required, status } = req.body;
+  const { event_id, text, type, options, is_required, status, others } = req.body;
 
   // Validate required fields
   if (!event_id || !type || is_required === undefined || status === undefined) {
@@ -50,6 +50,7 @@ exports.create = async (req, res) => {
           options,
           is_required,
           status,
+          others ? others : false,
           res
         );
       default:
@@ -99,6 +100,7 @@ async function handleOptionsTypeQuestion(
   options,
   is_required,
   status,
+  others,
   res
 ) {
   if (!Array.isArray(options) || options.length === 0) {
@@ -109,7 +111,7 @@ async function handleOptionsTypeQuestion(
     });
   }
 
-  const query = `INSERT INTO questions (event_id, type, text, options, is_required, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`;
+  const query = `INSERT INTO questions (event_id, type, text, options, is_required, status, others) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`;
   const result = await pool.query(query, [
     event_id,
     type,
@@ -117,6 +119,7 @@ async function handleOptionsTypeQuestion(
     options,
     is_required,
     status,
+    others,
   ]);
   return res.status(201).json({
     status: true,
@@ -126,8 +129,16 @@ async function handleOptionsTypeQuestion(
 }
 
 exports.update = async (req, res) => {
-  const { question_id, event_id, text, type, options, is_required, status } =
-    req.body;
+  const {
+    question_id,
+    event_id,
+    text,
+    type,
+    options,
+    is_required,
+    status,
+    others,
+  } = req.body;
 
   // Validate required fields
   if (
@@ -188,6 +199,7 @@ exports.update = async (req, res) => {
           options,
           is_required,
           status,
+          others ? others : false,
           res
         );
       default:
@@ -241,6 +253,7 @@ async function handleOptionsTypeQuestionUpdate(
   options,
   is_required,
   status,
+  others,
   res
 ) {
   if (!Array.isArray(options) || options.length === 0) {
@@ -251,7 +264,7 @@ async function handleOptionsTypeQuestionUpdate(
     });
   }
 
-  const query = `UPDATE questions SET event_id = $1, type = $2,  options = $3, is_required = $4, status = $5, text = $6 WHERE id = $7 RETURNING *`;
+  const query = `UPDATE questions SET event_id = $1, type = $2,  options = $3, is_required = $4, status = $5, text = $6, others = $7 WHERE id = $8 RETURNING *`;
   const result = await pool.query(query, [
     event_id,
     type,
@@ -259,6 +272,7 @@ async function handleOptionsTypeQuestionUpdate(
     is_required,
     status,
     text,
+    others,
     id,
   ]);
   return res.status(200).json({
