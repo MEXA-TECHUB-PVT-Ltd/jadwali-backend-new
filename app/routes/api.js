@@ -14,6 +14,8 @@ const platform = require("./platform/platform");
 const questions = require("./questions/questions");
 const schedule = require("./schedule/schedule");
 const cancel = require("./cancel/cancel");
+const faqs = require("./faqs/faqs");
+const feedbacks = require("./feedbacks/feedbacks");
 
 
 router.use("/users", users);
@@ -28,6 +30,8 @@ router.use("/platform", platform);
 router.use("/questions", questions);
 router.use("/schedule", schedule);
 router.use("/cancel", cancel);
+router.use("/faqs", faqs);
+router.use("/feedbacks", feedbacks);
 
 
 module.exports = router;
