@@ -31,8 +31,7 @@ const sendEmail = async (email, subject, htmlContent) => {
     console.log(err);
     return {
       success: false,
-      message: err.message,
-      alert: "Something went wrong sending email",
+      message: `Internal server error occurred`,
     };
   }
 };

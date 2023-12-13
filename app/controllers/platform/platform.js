@@ -52,6 +52,7 @@ exports.connectGoogle = async (req, res) => {
     access_type: "offline",
     scope: "https://www.googleapis.com/auth/calendar",
     state: user_id,
+    prompt: "consent",
   });
 
   res.redirect(authURL);

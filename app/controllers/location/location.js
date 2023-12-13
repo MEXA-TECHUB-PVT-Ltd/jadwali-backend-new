@@ -1,21 +1,14 @@
 const { pool } = require("../../config/db.config");
 
 exports.create = async (req, res) => {
-  const {
-    address,
-    post_code,
-    location,
-    type,
-    platform_name,
-    user_id,
-    event_id,
-  } = req.body;
+  const { address, post_code, location, type, platform_name, event_id } =
+    req.body;
 
   if (!type || !event_id) {
     return res.status(400).json({
       status: false,
       message:
-        "user_id, event_id and Type are required. Type must be 'online' or 'physical'.",
+        "event_id and Type are required. Type must be 'online' or 'physical'.",
     });
   }
 
@@ -80,23 +73,21 @@ exports.create = async (req, res) => {
   }
 };
 
-
 exports.update = async (req, res) => {
   const {
-    location_id, 
+    location_id,
     address,
     post_code,
     location,
     type,
     platform_name,
-    user_id,
     event_id,
   } = req.body;
 
   if (!location_id) {
     return res.status(400).json({
       status: false,
-      message: "Location ID is required for update.",
+      message: "location_id is required for update.",
     });
   }
 
@@ -109,6 +100,14 @@ exports.update = async (req, res) => {
       return res
         .status(404)
         .json({ status: false, message: "Location not found." });
+    }
+    const eventCheck = await pool.query("SELECT * FROM events WHERE id = $1", [
+      event_id,
+    ]);
+    if (eventCheck.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ status: false, message: "Event not found." });
     }
 
     const updateQuery = `
@@ -147,8 +146,6 @@ exports.update = async (req, res) => {
   }
 };
 
-
-
 exports.get = async (req, res) => {
   const { id } = req.params;
 
@@ -184,8 +181,6 @@ exports.get = async (req, res) => {
   }
 };
 
-
-
 exports.getAll = async (req, res) => {
   try {
     const locationsQuery = await pool.query("SELECT * FROM locations");
@@ -208,14 +203,13 @@ exports.getAll = async (req, res) => {
   }
 };
 
-
-exports.delete= async (req, res) => {
-  const { id } = req.params; 
+exports.delete = async (req, res) => {
+  const { id } = req.params;
 
   if (!id) {
     return res.status(400).json({
       status: false,
-      message: "Location ID is required for deletion.",
+      message: "location_id is required for deletion.",
     });
   }
 
@@ -227,12 +221,10 @@ exports.delete= async (req, res) => {
 
     // Check if a location was deleted
     if (deleteQuery.rowCount === 0) {
-      return res
-        .status(404)
-        .json({
-          status: false,
-          message: "Location not found or already deleted.",
-        });
+      return res.status(404).json({
+        status: false,
+        message: "Location not found or already deleted.",
+      });
     }
 
     return res.status(200).json({
@@ -245,7 +237,6 @@ exports.delete= async (req, res) => {
     return res.status(500).json({ status: false, message: error.message });
   }
 };
-
 
 exports.deleteAll = async (req, res) => {
   try {
@@ -274,4 +265,3 @@ exports.deleteAll = async (req, res) => {
     return res.status(500).json({ status: false, message: error.message });
   }
 };
-

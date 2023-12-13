@@ -1,15 +1,40 @@
 const { pool } = require("../../config/db.config");
-const { setGoogleCalendarEvent, createZoomMeeting } = require("../../lib/integrateCalendar");
+const {
+  setGoogleCalendarEvent,
+  createZoomMeeting,
+  updateGoogleCalendarEvent,
+  updateZoomMeeting,
+} = require("../../lib/integrateCalendar");
 
 const {
   refreshGoogleAccessToken,
   refreshZoomAccessToken,
 } = require("../../lib/refreshTokens");
+const sendEmail = require("../../lib/sendEmail");
 const { convertScheduleDateTime } = require("../../util/convertDateTimes");
+const { hostEmailEjsData, renderEJSTemplate } = require("../../util/emailData");
+const {
+  hostEmailPath,
+  inviteEmailPath,
+  hostRescheduleEmailPath,
+  inviteRescheduleEmailPath,
+} = require("../../util/paths");
+const slugify = require("slugify");
+const jwt = require("jsonwebtoken");
+const moment = require("moment");
 
 exports.create = async (req, res) => {
-  const { event_id, user_id, selected_date, selected_time, responses } =
-    req.body;
+  const {
+    event_id,
+    user_id,
+    selected_date,
+    selected_time,
+    responses,
+    type,
+    platform_name,
+  } = req.body;
+
+  console.log(responses);
 
   if (!event_id || !user_id || !selected_date || !selected_time || !responses) {
     return res.status(400).json({
@@ -23,6 +48,10 @@ exports.create = async (req, res) => {
   )}:00.000Z`;
 
   const scheduling_time = new Date(dateTimeStr).toISOString();
+
+    const formattedTime = moment(scheduling_time).format(
+      "MMMM DD, YYYY, hh:mm A"
+    );
 
   try {
     // Check if user and event exist
@@ -70,9 +99,22 @@ exports.create = async (req, res) => {
 
     const user = userCheck.rows[0];
     // const user_id = userCheck.rows[0].id;
+    const host_name = userCheck.rows[0].full_name;
+    const host_email = userCheck.rows[0].email;
     const event_name = eventCheck.rows[0].name;
     const event_duration = eventCheck.rows[0].duration;
+    const event_types = eventCheck.rows[0].one_to_one;
+    const event_type = event_types
+      ? "One to One Meeting"
+      : "One to Many meetings";
     // const event_id = eventCheck.rows[0].ide
+
+    const token_id = jwt.sign({ id: scheduling_id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
+    const cancelUrl = `${process.env.CLIENT_URL}/cancellations?token=${token_id}`;
+    const rescheduleUrl = `${process.env.CLIENT_URL}/rescheduling?token=${token_id}`;
 
     // Convert scheduling_time to a Date object
     const startDateTime = new Date(scheduling_time);
@@ -86,6 +128,7 @@ exports.create = async (req, res) => {
     const google_access_token = user.google_access_token;
 
     await refreshGoogleAccessToken(user_id);
+    await refreshZoomAccessToken(user_id);
 
     // Prepare the event details for Google Calendar
     const eventDetails = {
@@ -94,22 +137,101 @@ exports.create = async (req, res) => {
       endDateTime: endDateTime.toISOString(),
     };
 
-    // create a function to set the availability of event on google calendar
-    // I have setup the google console
-    try {
-      const calendarEvent = await setGoogleCalendarEvent(user, eventDetails);
-      console.log("Google Calendar Event Created:", calendarEvent);
-    } catch (error) {
-      console.error("Failed to create Google Calendar event:", error);
-      return "Failed to scheduled on Google Calendar";
+    let google_meet_link = "",
+      zoom_meeting_link = "",
+      google_calendar_event_id = "",
+      zoom_meeting_id = "";
+
+    if (type === "online") {
+      if (platform_name === "google") {
+        try {
+          const calendarEvent = await setGoogleCalendarEvent(
+            user,
+            eventDetails
+          );
+          console.log("Google Calendar Event Created:", calendarEvent);
+          google_meet_link = calendarEvent?.meetLink;
+          google_calendar_event_id = calendarEvent?.eventData?.id;
+          console.log(google_calendar_event_id);
+          await pool.query(
+            "UPDATE schedule SET google_calendar_event_id = $1 WHERE id = $2 AND event_id = $3 RETURNING *",
+            [google_calendar_event_id, scheduling_id, event_id]
+          );
+        } catch (error) {
+          console.error("Failed to create Google Calendar event:", error);
+          return "Failed to scheduled on Google Calendar";
+        }
+      }
+
+      if (platform_name === "zoom") {
+        try {
+          const calendarEvent = await createZoomMeeting(user, eventDetails);
+          zoom_meeting_link = calendarEvent.join_url;
+          zoom_meeting_id = calendarEvent.id;
+          await pool.query(
+            "UPDATE schedule SET zoom_meeting_id = $1, zoom_meeting_link = $2 WHERE id = $3 AND event_id = $4 RETURNING *",
+            [zoom_meeting_id, zoom_meeting_link, scheduling_id, event_id]
+          );
+          console.log("Zoom Calendar Event Created:", calendarEvent);
+        } catch (error) {
+          console.error("Failed to create Zoom Calendar event:", error);
+          return "Failed to scheduled on Zoom Calendar";
+        }
+      }
     }
-    await refreshZoomAccessToken(user_id);
+
+    const platform_meeting_link = google_meet_link
+      ? google_meet_link
+      : zoom_meeting_link;
+
+    const location = {
+      type,
+      platform_name,
+      google_meet_link: platform_meeting_link,
+    };
+
+    const invitee_email =
+      responses.find((r) => r.questionType === "email")?.text || "Unknown";
+
     try {
-      const calendarEvent = await createZoomMeeting(user, eventDetails);
-      console.log("Zoom Calendar Event Created:", calendarEvent);
-    } catch (error) {
-      console.error("Failed to create Zoom Calendar event:", error);
-      return "Failed to scheduled on Zoom Calendar";
+      const emailEjsData = hostEmailEjsData(
+        host_name,
+        event_type,
+        event_name,
+        responses,
+        formattedTime,
+        location,
+        cancelUrl,
+        rescheduleUrl
+      );
+      // send to host
+      const hostEmailRender = await renderEJSTemplate(
+        hostEmailPath,
+        emailEjsData
+      );
+      const emailSent = await sendEmail(
+        host_email,
+        "New Event Scheduled",
+        hostEmailRender
+      );
+      // send to invitee
+      const inviteeEmailRender = await renderEJSTemplate(
+        inviteEmailPath,
+        emailEjsData
+      );
+      const emailSentInvitee = await sendEmail(
+        invitee_email,
+        "New Event Scheduled",
+        inviteeEmailRender
+      );
+
+      if (emailSent.success || emailSentInvitee.success) {
+        console.log("email sent successfully to the host");
+      } else {
+        console.log("Couldn't send email to the host", emailSent.message);
+      }
+    } catch (sendEmailError) {
+      console.error(sendEmailError);
     }
 
     res.json({
@@ -132,7 +254,11 @@ exports.update = async (req, res) => {
     selected_date,
     selected_time,
     responses,
+    type,
+    platform_name,
   } = req.body;
+
+  console.log(type, platform_name);
 
   if (
     !event_id ||
@@ -149,10 +275,15 @@ exports.update = async (req, res) => {
     });
   }
 
+  console.log(responses);
+
   const dateTimeStr = `${selected_date}T${convertScheduleDateTime(
     selected_time
   )}:00.000Z`;
   const scheduling_time = new Date(dateTimeStr).toISOString();
+    const formattedTime = moment(scheduling_time).format(
+    "MMMM DD, YYYY, hh:mm A"
+  );
 
   try {
     const existingSchedule = await pool.query(
@@ -165,6 +296,18 @@ exports.update = async (req, res) => {
         status: false,
         message: "Schedule not found or does not match the event ID",
       });
+    }
+    const userCheck = await pool.query("SELECT * FROM users WHERE id = $1", [
+      user_id,
+    ]);
+
+    const eventCheck = await pool.query("SELECT * FROM events WHERE id = $1", [
+      event_id,
+    ]);
+    if (userCheck.rows.length === 0 || eventCheck.rows.length === 0) {
+      return res
+        .status(400)
+        .json({ status: false, message: "User or event not found" });
     }
 
     const schedule = await pool.query(
@@ -195,7 +338,136 @@ exports.update = async (req, res) => {
         );
       }
 
-      responseDetails.push(responseResult.rows[0]); // Store the response details
+      responseDetails.push(responseResult.rows[0]);
+    }
+
+    const googleCalendarEventId =
+      existingSchedule.rows[0].google_calendar_event_id;
+    const zoom_meeting_link = existingSchedule.rows[0].zoom_meeting_link;
+    const zoom_meeting_id = existingSchedule.rows[0].zoom_meeting_id;
+    const host_name = userCheck.rows[0].full_name;
+    const host_email = userCheck.rows[0].email;
+    const zoom_access_token = userCheck.rows[0].zoom_access_token;
+    const event_name = eventCheck.rows[0].name;
+    const event_duration = eventCheck.rows[0].duration;
+    const event_types = eventCheck.rows[0].one_to_one;
+    const event_type = event_types
+      ? "One to One Meeting"
+      : "One to Many meetings";
+    // Convert scheduling_time to a Date object
+    const startDateTime = new Date(scheduling_time);
+
+    // Calculate endDateTime by adding the duration to startDateTime
+    // Assuming event_duration is in minutes
+    const endDateTime = new Date(
+      startDateTime.getTime() + event_duration * 60000
+    );
+
+    const token_id = jwt.sign({ id: schedule_id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
+    const cancelUrl = `${process.env.CLIENT_URL}/cancellations?token=${token_id}`;
+    const rescheduleUrl = `${process.env.CLIENT_URL}/rescheduling?token=${token_id}`;
+
+    let google_meet_link;
+
+    const eventDetails = {
+      name: event_name,
+      startDateTime: startDateTime.toISOString(),
+      endDateTime: endDateTime.toISOString(),
+      duration: event_duration,
+    };
+
+    if (
+      googleCalendarEventId &&
+      type === "online" &&
+      platform_name === "google"
+    ) {
+      try {
+        // Function to delete the event from Google Calendar
+        const calendarEvent = await updateGoogleCalendarEvent(
+          userCheck.rows[0].google_access_token,
+          googleCalendarEventId,
+          eventDetails
+        );
+        google_meet_link = calendarEvent?.meetLink;
+        //  google_calendar_event_id = calendarEvent?.eventData?.id;
+
+        console.log("Google Calendar event updated successfully");
+      } catch (error) {
+        console.error("Failed to delete Google Calendar event:", error);
+      }
+    }
+
+    console.log(zoom_access_token);
+
+    if (zoom_meeting_id && type === "online" && platform_name === "zoom") {
+      try {
+        const calendarEvent = await updateZoomMeeting(
+          zoom_access_token,
+          zoom_meeting_id,
+          eventDetails
+        );
+        console.log("Zoom Calendar Event Updated:", calendarEvent);
+      } catch (error) {
+        console.error("Failed to update Zoom Calendar event:", error);
+        return "Failed to scheduled on Zoom Calendar";
+      }
+    }
+
+    const platform_meeting_link = google_meet_link
+      ? google_meet_link
+      : zoom_meeting_link;
+
+    const location = {
+      type,
+      platform_name,
+      google_meet_link: platform_meeting_link,
+    };
+
+    const invitee_email =
+      responses.find((r) => r.questionType === "email")?.text || "Unknown";
+
+    try {
+      const emailEjsData = hostEmailEjsData(
+        host_name,
+        event_type,
+        event_name,
+        responses,
+        formattedTime,
+        location,
+        cancelUrl,
+        rescheduleUrl
+      );
+      // send to host
+      const hostEmailRender = await renderEJSTemplate(
+        hostRescheduleEmailPath,
+        emailEjsData
+      );
+      const emailSent = await sendEmail(
+        host_email,
+        "Your Event is Rescheduled",
+        hostEmailRender
+      );
+      // send to invitee
+      const inviteeEmailRender = await renderEJSTemplate(
+        inviteRescheduleEmailPath,
+        emailEjsData
+      );
+      const emailSentInvitee = await sendEmail(
+        invitee_email,
+        "Your Event is Rescheduled",
+        inviteeEmailRender
+      );
+
+      if (emailSent.success || emailSentInvitee.success) {
+        console.log("email sent successfully to the host");
+      } else {
+        console.log("Couldn't send email to the host", emailSent.message);
+      }
+    } catch (sendEmailError) {
+      console.error(sendEmailError);
     }
 
     res.json({
@@ -230,7 +502,19 @@ exports.get = async (req, res) => {
     const event_id = scheduledEvent.rows[0].event_id;
 
     const getEventDetails = await pool.query(
-      "SELECT * FROM events WHERE id = $1",
+      `
+  SELECT e.*, 
+    json_build_object(
+      'address', l.address, 
+      'post_code', l.post_code, 
+      'location', l.location, 
+      'type', l.type, 
+      'platform_name', l.platform_name
+    ) as location 
+  FROM events e 
+  LEFT JOIN locations l ON e.id = l.event_id 
+  WHERE e.id = $1
+`,
       [event_id]
     );
 
@@ -281,10 +565,6 @@ exports.get = async (req, res) => {
       "SELECT full_name, email FROM users WHERE id = $1",
       [user_id]
     );
-
-    // if (getEventDetails.rowCount === 0) {
-    //   return res.status(404).json({ status: false, message: "Event not found" });
-    // }
 
     // Fetch questions and responses together
     const questionsAndResponses = await pool.query(

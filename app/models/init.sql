@@ -26,7 +26,6 @@ CREATE TABLE IF NOT EXISTS users(
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
--- do modifications for the availability table
 CREATE TABLE IF NOT EXISTS availability_profiles (
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -94,11 +93,11 @@ CREATE TABLE IF NOT EXISTS attach_service_type(
 CREATE TABLE IF NOT EXISTS events(
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
+    name TEXT,
     event_price INT,
     deposit_price INT,
-    description VARCHAR(255) NOT NULL,
-    duration INT NOT NULL,
+    description VARCHAR(255),
+    duration INT,
     one_to_one BOOLEAN NOT NULL DEFAULT FALSE,
     invite_in_type TEXT,
     -- custom date range | into future | availableDays
@@ -112,6 +111,7 @@ CREATE TABLE IF NOT EXISTS events(
     before_time INT,
     after_time INT,
     selected_avail_id INT REFERENCES availability_profiles(id) ON DELETE CASCADE,
+    slug TEXT UNIQUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -144,6 +144,9 @@ CREATE TABLE IF NOT EXISTS schedule (
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     scheduling_time TIMESTAMP WITH TIME ZONE NOT NULL,
     cancellation_reason TEXT,
+    google_calendar_event_id TEXT,
+    zoom_meeting_id TEXT,
+    zoom_meeting_link TEXT,
     status VARCHAR(50) DEFAULT 'pending',
     -- can be pending, confirmed, cancelled
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

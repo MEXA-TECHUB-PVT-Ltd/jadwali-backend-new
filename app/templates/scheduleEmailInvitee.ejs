@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style type="text/css">
+      body {
+        font-family: "Roboto", sans-serif;
+        background-color: #f4f4f4;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+      }
+      .email-container {
+        max-width: 600px;
+        background-color: #ffffff;
+        margin: 0 auto;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+      }
+      .email-content {
+        margin-bottom: 20px;
+      }
+      a {
+        color: #007bff;
+        text-decoration: none;
+      }
+      .email-footer {
+        text-align: center;
+        margin-top: 30px;
+        font-size: 0.8em;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <p class="email-content"><b>Hi</b> <%= inviteeName %>,</p>
+      <p class="email-content"><b>Event Type:</b> <%= event_type %></p>
+      <!-- <p class="email-content">A new event has been scheduled.</p> -->
+      <p class="email-content"><b>Event Name:</b> <%= event_name %></p>
+      <p class="email-content"><b>Invitee:</b> <%= inviteeName %></p>
+      <p class="email-content"><b>Invitee Email:</b> <%= inviteeEmail %></p>
+      <p class="email-content">
+        Need to make changes with this event:
+      </p>
+      <p class="email-content">
+        <b>Cancel:</b>
+        <a href=<%= cancelUrl  %> ><%= cancelUrl  %></a>
+      </p>
+      <p class="email-content">
+        <b>Reschedule:</b>
+        <a href=<%= rescheduleUrl  %> ><%= rescheduleUrl  %></a>
+      </p>
+      
+      <p class="email-content">
+        <b>When:</b> <%= event_date_time %>
+      </p>
+      <p class="email-content">
+        <b>Location: </b>
+        <% if (location_type === 'online' && platform_name === 'google') { %>
+        This is a Google Meet web conference. You can join this meeting from
+        your computer, tablet, or smartphone
+        <a href="<%= google_meet_link %>">Join now</a>
+        <% } else { %>
+              This is a <%= platform_name %> web conference.
+        <a href="<%= google_meet_link %>">Join now</a>
+        <% } %>
+      </p>
+                <h5>Questions:</h5>
+<% questionsAndResponses.forEach(function(response) { %>
+  <p class="email-content">
+    <b><%= response.question_text %>:</b> 
+    <% if(response.questionType === 'checkboxes' && response.options) { %>
+      <% response.options.forEach(function(option) { %>
+        <p><%= option %></p> 
+      <% }); %>
+    <% } else { %>
+    <p><%= response.text %></p>  
+    <% } %>
+  </p>
+<% }); %>
+      <p class="email-footer">
+        &copy; <%= new Date().getFullYear() %> Jadwali. All rights reserved.
+      </p>
+    </div>
+  </body>
+</html>
