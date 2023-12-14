@@ -87,7 +87,7 @@ gap: 10px
         <b>Location: </b>
         <% if (location_type === 'online' && platform_name === 'google') { %>
         This is a <%= platform_name %> web conference.
-        <a href="<%= google_meet_link %>">google_meet_link</a>
+        <a href="<%= google_meet_link %>"><%= google_meet_link %></a>
         <% } else { %>
       This is a <%= platform_name %> web conference.
       <a href="<%= google_meet_link %>"><%= google_meet_link %></a>

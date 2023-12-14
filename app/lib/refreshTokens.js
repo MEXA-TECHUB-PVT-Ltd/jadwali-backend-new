@@ -7,39 +7,34 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
 exports.refreshGoogleAccessToken = async (userId) => {
   try {
-    // Fetch the user's current refresh token and expiry from the database
+    // Fetch the user's current refresh token from the database
     const user = await getUser(userId);
     if (!user) throw new Error("User not found");
 
-    console.log("trying to refresh access token");
-
-    // Refresh the token if necessary
-    if (new Date() < new Date(user.google_expiry_at)) {
-      return { status: true, message: "Token still valid, no need to refresh" };
-    }
+    console.log("Trying to refresh access token");
+    console.log("Refresh Token:", user.google_refresh_token);
 
     const oauth2Client = new google.auth.OAuth2(
       GOOGLE_CLIENT_ID,
       GOOGLE_CLIENT_SECRET
     );
 
-    oauth2Client.setCredentials({
-      refresh_token: user.google_refresh_token,
-    });
+    oauth2Client.setCredentials({ refresh_token: user.google_refresh_token });
 
-    const { token, res } = await oauth2Client.getAccessToken();
-    console.log("😁", res.data.expires_in);
-    // Calculate new expiry date
-    const expires_in = res.data.expires_in;
-    const newExpiry = new Date(new Date().getTime() + expires_in * 1000);
-    console.log(newExpiry);
+    // Refresh the access token
+    const { credentials } = await oauth2Client.refreshAccessToken();
+    console.log("Refreshed Credentials:", credentials);
 
-    // Update the new token in the database
-    await updateUserToken(userId, token, newExpiry);
+    // Use the expiry_date directly from credentials
+    const newExpiry = new Date(credentials.expiry_date);
+    console.log("New Expiry Date:", newExpiry);
+
+    // Update the new token and its expiry in the database
+    await updateUserToken(userId, credentials.access_token, newExpiry);
 
     return { status: true, message: "Token refreshed successfully" };
   } catch (error) {
-    console.error("Error refreshing Google access token:", error.message);
+    console.error("Error refreshing Google access token:", error);
     // Nullify the tokens in the database on error
     await nullifyUserTokens(userId);
     return {

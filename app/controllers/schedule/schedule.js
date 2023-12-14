@@ -25,6 +25,15 @@ const {
   inviteRescheduleEmailPath,
 } = require("../../util/paths");
 const jwt = require("jsonwebtoken");
+const {
+  validateRequestBody,
+  extractInviteeDetails,
+  insertScheduling,
+  checkUserAndEventExistence,
+  sendEmailNotifications,
+  createGoogleCalendarEvent,
+  createZoomEvent,
+} = require("../../util/schedulingHandler");
 
 exports.create = async (req, res) => {
   const {
@@ -37,22 +46,15 @@ exports.create = async (req, res) => {
     platform_name,
   } = req.body;
 
-  if (!event_id || !user_id || !selected_date || !selected_time || !responses) {
-    return res.status(400).json({
-      status: false,
-      message:
-        "event_id, user_id, selected_date, selected_time, and responses are required",
-    });
+  const validationError = validateRequestBody(req.body);
+  if (validationError) {
+    return res.status(400).json({ status: false, message: validationError });
   }
-  const invitee_email =
-    responses.find((r) => r.questionType === "email")?.text || "Unknown";
-  const invitee_name =
-    responses.find((r) => r.questionType === "name")?.text || "Unknown";
-  if (!invitee_name || !invitee_email) {
-    return res.status(400).json({
-      status: false,
-      message: "invitee name and email are required",
-    });
+  const { invitee_email, invitee_name, error } = extractInviteeDetails(
+    req.body.responses
+  );
+  if (error) {
+    return res.status(400).json({ status: false, message: error });
   }
   const dateTimeStr = `${selected_date}T${convertScheduleDateTime(
     selected_time
@@ -62,10 +64,11 @@ exports.create = async (req, res) => {
 
   try {
     // Check if user and event exist
-    const [userCheck, eventCheck] = await Promise.all([
-      pool.query("SELECT * FROM users WHERE id = $1", [user_id]),
-      pool.query("SELECT * FROM events WHERE id = $1", [event_id]),
-    ]);
+    const { userCheck, eventCheck } = await checkUserAndEventExistence(
+      user_id,
+      event_id
+    );
+
     if (userCheck.rows.length === 0 || eventCheck.rows.length === 0) {
       return res
         .status(400)
@@ -73,10 +76,12 @@ exports.create = async (req, res) => {
     }
 
     // Insert into scheduling table
-    const schedulingResult = await pool.query(
-      "INSERT INTO schedule(event_id, user_id, scheduling_time) VALUES($1, $2, $3) RETURNING *",
-      [event_id, user_id, scheduling_time]
+    const schedulingResult = await insertScheduling(
+      req.body.event_id,
+      req.body.user_id,
+      scheduling_time
     );
+
     const scheduling_id = schedulingResult.rows[0].id;
 
     // Store inserted responses with question details
@@ -102,8 +107,6 @@ exports.create = async (req, res) => {
       });
     }
 
-    const user = userCheck.rows[0];
-    // const user_id = userCheck.rows[0].id;
     const host_name = userCheck.rows[0].full_name;
     const host_email = userCheck.rows[0].email;
     const event_name = eventCheck.rows[0].name;
@@ -131,8 +134,6 @@ exports.create = async (req, res) => {
       startDateTime.getTime() + event_duration * 60000
     );
 
-    const google_access_token = user.google_access_token;
-
     // Prepare the event details for Google Calendar
     let eventDetails = {
       name: event_name,
@@ -153,86 +154,69 @@ exports.create = async (req, res) => {
 
     let isErrorCreatingOnlineEvent = false;
 
+    const google_expiry_at = userCheck.rows[0].google_expiry_at;
+    const zoom_expiry_at = userCheck.rows[0].zoom_expiry_at;
+    const currentTime = new Date();
+
     try {
       if (platform_name === "google") {
-        await refreshGoogleAccessToken(user_id);
+        // Check if Google token has expired
+        if (new Date(google_expiry_at) <= currentTime) {
+          await refreshGoogleAccessToken(user_id);
+        } else {
+          console.log("Google token still valid, no need to refresh");
+        }
       } else if (platform_name === "zoom") {
-        await refreshZoomAccessToken(user_id);
+        // Check if Zoom token has expired
+        if (new Date(zoom_expiry_at) <= currentTime) {
+          await refreshZoomAccessToken(user_id);
+        } else {
+          console.log("Zoom token still valid, no need to refresh");
+        }
       }
     } catch (tokenRefreshError) {
       console.error("Token refresh failed:", tokenRefreshError);
     }
 
     // after we inserted the new token we're fetching the user again
-    const afterUpdatedToken = await pool.query("SELECT * FROM users WHERE id = $1", [user_id]);
+    const afterUpdatedToken = await pool.query(
+      "SELECT * FROM users WHERE id = $1",
+      [user_id]
+    );
     const userAfterNewTokens = afterUpdatedToken.rows[0];
 
     try {
+      let eventCreationResult;
+
       if (type === "online") {
         if (platform_name === "google") {
-          try {
-            const calendarEvent = await setGoogleCalendarEvent(
-              userAfterNewTokens,
-              eventDetails
-            );
-            console.log("ERROR: 🤣🤣");
-          if (calendarEvent.status === false) {
-            console.log("I come here", calendarEvent.status);
-            isErrorCreatingOnlineEvent = true;
-          }
-
-            console.log(
-              "Google Calendar Event Created:",
-              calendarEvent.eventData
-            );
-            if (!calendarEvent) {
-              console.log("we have an error:", calendarEvent.error);
-            }
-            google_meet_link = calendarEvent?.meetLink;
-            google_calendar_event_id = calendarEvent?.eventData?.id;
-            console.log(google_calendar_event_id);
-            await pool.query(
-              "UPDATE schedule SET google_calendar_event_id = $1 WHERE id = $2 AND event_id = $3 RETURNING *",
-              [google_calendar_event_id, scheduling_id, event_id]
-            );
-          } catch (error) {
-            console.log(isErrorCreatingOnlineEvent);
-            console.error("Failed to create Google Calendar event:", error);
-            return "Failed to scheduled on Google Calendar";
-          }
+          eventCreationResult = await createGoogleCalendarEvent(
+            userAfterNewTokens,
+            eventDetails
+          );
+        } else if (platform_name === "zoom") {
+          eventCreationResult = await createZoomEvent(
+            userAfterNewTokens,
+            eventDetails
+          );
         }
 
-        if (platform_name === "zoom") {
-          try {
-            const calendarEvent = await createZoomMeeting(
-              userAfterNewTokens,
-              eventDetails
-            );
-            if (calendarEvent.status === false) {
-              console.log(
-                "Failed to create Google Calendar event",
-                calendarEvent.error
-              );
-              isErrorCreatingOnlineEvent = true;
-            }
-            zoom_meeting_link = calendarEvent.join_url;
-            zoom_meeting_id = calendarEvent.id;
-            await pool.query(
-              "UPDATE schedule SET zoom_meeting_id = $1 WHERE id = $2 AND event_id = $3 RETURNING *",
-              [zoom_meeting_id, scheduling_id, event_id]
-            );
-            console.log("Zoom Calendar Event Created:", calendarEvent);
-          } catch (error) {
-            isErrorCreatingOnlineEvent = true;
-            console.error("Failed to create Zoom Calendar event:", error);
-            return "Failed to scheduled on Zoom Calendar";
-          }
+        if (!eventCreationResult.success) {
+          isErrorCreatingOnlineEvent = true;
+          console.log("Failed to create the event on", platform_name);
+        }
+
+        if (platform_name === "google") {
+          google_meet_link = eventCreationResult.eventData?.meetLink;
+          google_calendar_event_id = eventCreationResult.eventData?.id;
+        } else if (platform_name === "zoom") {
+          zoom_meeting_link = eventCreationResult.eventData?.join_url;
+          zoom_meeting_id = eventCreationResult.eventData?.id;
         }
       }
     } catch (error) {
-      console.log(`Failed to create the event on ${platform_name}`, error);
+      console.log(`Error handling online event creation: ${error}`);
     }
-
     const linkForSyncOnlinePlatforms = `${process.env.SERVER_URL}/platform/connect-${platform_name}?user_id=${user_id}`;
     const platform_meeting_link = google_meet_link
       ? google_meet_link
@@ -251,16 +235,6 @@ exports.create = async (req, res) => {
     //   [scheduling_id, invitee_email, invitee_name]
     // );
 
-
-    const icsString = generateICSString(eventDetails);
-    console.log("iCS string", icsString);
-    const attachments = [
-      {
-        filename: "invite.ics",
-        content: icsString,
-        contentType: "text/calendar",
-      },
-    ];
     const addCalendarLink = createAddToCalendarLink(eventDetails);
 
     try {
@@ -277,34 +251,34 @@ exports.create = async (req, res) => {
         linkForSyncOnlinePlatforms,
         addCalendarLink
       );
-      // send to host
+
+      // Render the EJS templates for host and invitee emails
       const hostEmailRender = await renderEJSTemplate(
         hostEmailPath,
         emailEjsData
       );
-      const emailSent = await sendEmail(
-        host_email,
-        "New Event Scheduled",
-        hostEmailRender,
-        attachments
-      );
-      // send to invitee
       const inviteeEmailRender = await renderEJSTemplate(
         inviteEmailPath,
         emailEjsData
       );
-      const emailSentInvitee = await sendEmail(
-        invitee_email,
-        "New Event Scheduled",
-        inviteeEmailRender,
-        attachments
-      );
 
-      if (emailSent.success || emailSentInvitee.success) {
-        console.log("email sent successfully to the host");
-      } else {
-        console.log("Couldn't send email to the host", emailSent.message);
-      }
+      // Prepare the email data object
+      const emailData = {
+        hostEmail: host_email,
+        inviteeEmail: invitee_email,
+        hostEmailContent: hostEmailRender,
+        inviteeEmailContent: inviteeEmailRender,
+        attachments: [
+          {
+            filename: "invite.ics",
+            content: generateICSString(eventDetails),
+            contentType: "text/calendar",
+          },
+        ],
+      };
+
+      // Call sendEmailNotifications function
+      await sendEmailNotifications(emailData);
     } catch (sendEmailError) {
       console.error(sendEmailError);
     }
