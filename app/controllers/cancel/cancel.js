@@ -1,10 +1,16 @@
 const { pool } = require("../../config/db.config");
-const { deleteGoogleCalendarEvent, deleteZoomMeeting } = require("../../lib/integrateCalendar");
+const {
+  deleteGoogleCalendarEvent,
+  deleteZoomMeeting,
+} = require("../../lib/integrateCalendar");
+const {
+  refreshGoogleAccessToken,
+  refreshZoomAccessToken,
+} = require("../../lib/refreshTokens");
 const sendEmail = require("../../lib/sendEmail");
 const { renderEJSTemplate } = require("../../util/emailData");
 const { hostCancelEmailPath } = require("../../util/paths");
 const moment = require("moment");
-
 
 exports.scheduleEvent = async (req, res) => {
   const {
@@ -28,7 +34,6 @@ exports.scheduleEvent = async (req, res) => {
     "MMMM DD, YYYY, hh:mm A"
   );
 
-
   console.log({ platform_name, type });
 
   try {
@@ -44,18 +49,17 @@ exports.scheduleEvent = async (req, res) => {
         .json({ status: false, message: "schedule event not found" });
     }
 
-    // if (schedulingCheck.rows[0].status === "cancelled") {
-    //   await pool.query("ROLLBACK");
-    //   return res.status(400).json({
-    //     status: false,
-    //     message: "schedule event is already cancelled",
-    //   });
-    // }
+    if (schedulingCheck.rows[0].status === "cancelled") {
+      await pool.query("ROLLBACK");
+      return res.status(400).json({
+        status: false,
+        message: "schedule event is already cancelled",
+      });
+    }
 
     const googleCalendarEventId =
       schedulingCheck.rows[0].google_calendar_event_id;
-    const zoomMeetingId =
-      schedulingCheck.rows[0].zoom_meeting_id;
+    const zoomMeetingId = schedulingCheck.rows[0].zoom_meeting_id;
     const user_id = schedulingCheck.rows[0].user_id;
     const user = await pool.query("SELECT * FROM users WHERE id = $1", [
       user_id,
@@ -66,6 +70,18 @@ exports.scheduleEvent = async (req, res) => {
     const { full_name: host_name, email: host_email } = host_user;
 
     const event_type = one_to_one ? "One to One" : "One to Many";
+
+    if (type === "online") {
+      try {
+        if (platform_name === "google") {
+          await refreshGoogleAccessToken(user_id);
+        } else if (platform_name === "zoom") {
+          await refreshZoomAccessToken(user_id);
+        }
+      } catch (tokenRefreshError) {
+        console.error("Token refresh failed:", tokenRefreshError);
+      }
+    }
 
     if (
       googleCalendarEventId &&

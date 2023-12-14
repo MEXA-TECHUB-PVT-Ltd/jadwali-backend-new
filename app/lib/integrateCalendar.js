@@ -11,11 +11,20 @@ exports.setGoogleCalendarEvent = async (user, eventDetails) => {
     const auth = new google.auth.OAuth2();
     auth.setCredentials({ access_token: user.google_access_token });
 
+    // organizer email
+    const organizerEmail = user.email;
+
+    console.log("☺☺", organizerEmail);
+
     const calendar = google.calendar({ version: "v3", auth });
 
     // Prepare the event data with conference data request
     const event = {
       summary: eventDetails.name,
+      organizer: {
+        email: organizerEmail,
+        self: true,
+      },
       start: {
         dateTime: eventDetails.startDateTime,
         timeZone: "UTC", // Replace with your timezone
@@ -30,7 +39,13 @@ exports.setGoogleCalendarEvent = async (user, eventDetails) => {
           conferenceSolutionKey: { type: "hangoutsMeet" },
         },
       },
-      // Additional event details like attendees, location, etc. can be added here
+      attendees: [
+        {
+          email: eventDetails.invitee_email,
+          displayName: eventDetails.name,
+          resource: true,
+        },
+      ],
     };
 
     // Insert the event into the calendar with conference data request
@@ -38,6 +53,8 @@ exports.setGoogleCalendarEvent = async (user, eventDetails) => {
       calendarId: "primary", // Use the primary calendar of the user
       resource: event,
       conferenceDataVersion: 1, // Request conference data (Google Meet link)
+      sendNotifications: true,
+      sendUpdates: "all", // Change this line to use a valid value
     });
 
     const meetLink = response.data.conferenceData?.entryPoints?.find(
@@ -50,7 +67,7 @@ exports.setGoogleCalendarEvent = async (user, eventDetails) => {
     };
   } catch (error) {
     console.error("Error creating calendar event:", error);
-    throw error; // Re-throw the error for the caller to handle
+    return { status: false, error }; // Re-throw the error for the caller to handle
   }
 };
 
@@ -104,7 +121,8 @@ exports.updateGoogleCalendarEvent = async (
     };
   } catch (error) {
     console.error("Error updating calendar event:", error);
-    throw error; // Re-throw the error for the caller to handle
+    return { status: false, error };
+    // throw error; // Re-throw the error for the caller to handle
   }
 };
 
@@ -134,7 +152,8 @@ exports.deleteGoogleCalendarEvent = async (eventId, accessToken) => {
     console.log("Event deleted successfully");
   } catch (error) {
     console.error("Error deleting event:", error);
-    throw error; // Re-throw the error for further handling
+    return { status: false, error };
+    // throw error; // Re-throw the error for further handling
   }
 };
 
@@ -171,7 +190,8 @@ exports.createZoomMeeting = async (user, meetingDetails) => {
     return data; // This contains the meeting details including the join URL
   } catch (error) {
     console.error("Error creating Zoom meeting:", error);
-    throw error;
+    return { status: false, error };
+    // throw error;
   }
 };
 
@@ -224,10 +244,10 @@ exports.updateZoomMeeting = async (accessToken, meetingId, meetingDetails) => {
     }
   } catch (error) {
     console.error("Error updating Zoom meeting:", error);
-    throw error;
+    return { status: false, error };
+    // throw error;
   }
 };
-
 
 exports.deleteZoomMeeting = async (accessToken, meetingId) => {
   try {

@@ -161,6 +161,14 @@ CREATE TABLE IF NOT EXISTS question_responses (
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+CREATE TABLE IF NOT EXISTS invitee(
+    id SERIAL PRIMARY KEY,
+    schedule_id INT NOT NULL REFERENCES schedule(id) ON DELETE CASCADE,
+    email TEXT NULL UNIQUE,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
 CREATE TABLE IF NOT EXISTS feedbacks(
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -19,7 +19,10 @@ exports.hostEmailEjsData = (
   event_date_time,
   location,
   cancelUrl,
-  rescheduleUrl
+  rescheduleUrl,
+  isErrorCreatingOnlineEvent,
+  syncWIthPlatformLink,
+  addCalendarLink
 ) => {
   const inviteeName =
     responses.find((r) => r.questionType === "name")?.text || "Unknown";
@@ -38,7 +41,30 @@ exports.hostEmailEjsData = (
     google_meet_link: location.google_meet_link,
     cancelUrl,
     rescheduleUrl,
-    questionsAndResponses: responses, 
+    questionsAndResponses: responses,
+    isErrorCreatingOnlineEvent,
+    syncWIthPlatformLink,
+    addCalendarLink,
   };
+};
+
+
+
+
+exports.createAddToCalendarLink = (eventDetails) => {
+  const formatDate = (date) => {
+    return date.toISOString().replace(/-|:|\.\d+/g, "");
+  };
+
+  const startTime = formatDate(new Date(eventDetails.startDateTime));
+  const endTime = formatDate(new Date(eventDetails.endDateTime));
+
+  const details = encodeURIComponent(eventDetails.description || "");
+  const location = encodeURIComponent(
+    eventDetails.location.platform_name || "No location"
+  );
+  const summary = encodeURIComponent(eventDetails.summary || eventDetails.name);
+
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${summary}&dates=${startTime}/${endTime}&details=${details}&location=${location}`;
 };
 

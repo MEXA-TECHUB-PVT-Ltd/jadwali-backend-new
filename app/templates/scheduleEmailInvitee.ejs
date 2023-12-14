@@ -58,6 +58,7 @@
         <b>When:</b> <%= event_date_time %>
       </p>
       <p class="email-content">
+        <% if(isErrorCreatingOnlineEvent === false) { %>
         <b>Location: </b>
         <% if (location_type === 'online' && platform_name === 'google') { %>
         This is a Google Meet web conference. You can join this meeting from
@@ -66,6 +67,7 @@
         <% } else { %>
               This is a <%= platform_name %> web conference.
         <a href="<%= google_meet_link %>">Join now</a>
+        <% } %>
         <% } %>
       </p>
                 <h5>Questions:</h5>

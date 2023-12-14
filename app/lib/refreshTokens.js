@@ -11,6 +11,8 @@ exports.refreshGoogleAccessToken = async (userId) => {
     const user = await getUser(userId);
     if (!user) throw new Error("User not found");
 
+    console.log("trying to refresh access token");
+
     // Refresh the token if necessary
     if (new Date() < new Date(user.google_expiry_at)) {
       return { status: true, message: "Token still valid, no need to refresh" };
@@ -26,10 +28,11 @@ exports.refreshGoogleAccessToken = async (userId) => {
     });
 
     const { token, res } = await oauth2Client.getAccessToken();
-
+    console.log("😁", res.data.expires_in);
     // Calculate new expiry date
     const expires_in = res.data.expires_in;
     const newExpiry = new Date(new Date().getTime() + expires_in * 1000);
+    console.log(newExpiry);
 
     // Update the new token in the database
     await updateUserToken(userId, token, newExpiry);
@@ -76,6 +79,8 @@ exports.refreshZoomAccessToken = async (userId) => {
     if (!user || !user.zoom_refresh_token) {
       throw new Error("Zoom credentials not found for the user");
     }
+
+    console.log("trying to refresh access token");
 
     const refreshToken = user.zoom_refresh_token;
     const credentials = Buffer.from(
