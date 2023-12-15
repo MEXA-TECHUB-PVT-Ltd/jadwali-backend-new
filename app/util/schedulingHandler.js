@@ -1,5 +1,8 @@
 const { pool } = require("../config/db.config");
-const { createZoomMeeting, setGoogleCalendarEvent } = require("../lib/integrateCalendar");
+const {
+  createZoomMeeting,
+  setGoogleCalendarEvent,
+} = require("../lib/integrateCalendar");
 const sendEmail = require("../lib/sendEmail");
 
 exports.validateRequestBody = (body) => {
@@ -31,8 +34,8 @@ exports.checkUserAndEventExistence = async (user_id, event_id) => {
 
 exports.insertScheduling = async (event_id, user_id, scheduling_time) => {
   return await pool.query(
-    "INSERT INTO schedule(event_id, user_id, scheduling_time) VALUES($1, $2, $3) RETURNING *",
-    [event_id, user_id, scheduling_time]
+    "INSERT INTO schedule(event_id, user_id, scheduling_time, status) VALUES($1, $2, $3, $4) RETURNING *",
+    [event_id, user_id, scheduling_time, "scheduled"]
   );
 };
 
@@ -42,13 +45,21 @@ exports.sendEmailNotifications = async (emailData) => {
     inviteeEmail,
     hostEmailContent,
     inviteeEmailContent,
+    type,
     attachments,
   } = emailData;
+
+  const whichType =
+    type === "schedule"
+      ? "schedule"
+      : type === "reschedule"
+      ? "Reschedule"
+      : "Cancelled";
 
   try {
     const emailSentToHost = await sendEmail(
       hostEmail,
-      "New Event Scheduled",
+      `An Event has been ${whichType}`,
       hostEmailContent,
       attachments
     );
@@ -63,7 +74,7 @@ exports.sendEmailNotifications = async (emailData) => {
     // Sending email to the invitee
     const emailSentToInvitee = await sendEmail(
       inviteeEmail,
-      "You're Invited to an Event",
+      `An Event has been ${whichType}`,
       inviteeEmailContent,
       attachments
     );
@@ -89,8 +100,6 @@ exports.sendEmailNotifications = async (emailData) => {
   }
 };
 
-
-
 exports.createGoogleCalendarEvent = async (user, eventDetails) => {
   try {
     const calendarEvent = await setGoogleCalendarEvent(user, eventDetails);
@@ -101,15 +110,23 @@ exports.createGoogleCalendarEvent = async (user, eventDetails) => {
       );
       return { success: false, error: calendarEvent?.error };
     }
+    const google_calendar_event_id = calendarEvent.id;
+    console.log("😀😀😀😀😀😀😀😀😀😀😀")
+    
+    console.log(calendarEvent.id)
+    console.log(google_calendar_event_id);
+    await pool.query(
+      "UPDATE schedule SET google_calendar_event_id = $1 RETURNING *",
+      [google_calendar_event_id]
+    );
+
     console.log("Google Calendar Event Created:", calendarEvent.eventData);
     return { success: true, eventData: calendarEvent.eventData };
   } catch (error) {
     console.error("Exception in creating Google Calendar event:", error);
     return { success: false, error };
   }
-}
-
-
+};
 
 exports.createZoomEvent = async (user, eventDetails) => {
   try {
@@ -121,10 +138,16 @@ exports.createZoomEvent = async (user, eventDetails) => {
       );
       return { success: false, error: calendarEvent?.error };
     }
+    const zoom_meeting_id = calendarEvent.id;
+    const zoom_meeting_link = calendarEvent.join_url;
+    await pool.query(
+      "UPDATE schedule SET zoom_meeting_id = $1, zoom_meeting_link = $2 RETURNING *",
+      [zoom_meeting_id, zoom_meeting_link]
+    );
     console.log("Zoom Calendar Event Created:", calendarEvent);
     return { success: true, eventData: calendarEvent };
   } catch (error) {
     console.error("Exception in creating Zoom Calendar event:", error);
     return { success: false, error };
   }
-}
+};

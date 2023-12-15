@@ -15,6 +15,8 @@ exports.hostEmailEjsData = (
   host_name,
   event_type,
   event_name,
+  invitee_email,
+  invitee_name,
   responses,
   event_date_time,
   location,
@@ -22,12 +24,13 @@ exports.hostEmailEjsData = (
   rescheduleUrl,
   isErrorCreatingOnlineEvent,
   syncWIthPlatformLink,
-  addCalendarLink
+  addCalendarLink,
+  reschedule_reason
 ) => {
   const inviteeName =
-    responses.find((r) => r.questionType === "name")?.text || "Unknown";
+    responses?.find((r) => r?.questionType === "name")?.text || invitee_name ;
   const inviteeEmail =
-    responses.find((r) => r.questionType === "email")?.text || "Unknown";
+    responses?.find((r) => r?.questionType === "email")?.text || invitee_email ;
 
   return {
     host_name,
@@ -45,6 +48,7 @@ exports.hostEmailEjsData = (
     isErrorCreatingOnlineEvent,
     syncWIthPlatformLink,
     addCalendarLink,
+    reason: reschedule_reason,
   };
 };
 
@@ -61,7 +65,7 @@ exports.createAddToCalendarLink = (eventDetails) => {
 
   const details = encodeURIComponent(eventDetails.description || "");
   const location = encodeURIComponent(
-    eventDetails.location.platform_name || "No location"
+    eventDetails?.location?.platform_name || "No location"
   );
   const summary = encodeURIComponent(eventDetails.summary || eventDetails.name);
 

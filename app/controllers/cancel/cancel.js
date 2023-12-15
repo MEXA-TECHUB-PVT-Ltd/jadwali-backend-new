@@ -69,6 +69,38 @@ exports.scheduleEvent = async (req, res) => {
     const { name: event_name, one_to_one } = event;
     const { full_name: host_name, email: host_email } = host_user;
 
+    const google_expiry_at = user.rows[0].google_expiry_at;
+    const zoom_expiry_at = user.rows[0].zoom_expiry_at;
+    const currentTime = new Date();
+
+    try {
+      if (platform_name === "google") {
+        // Check if Google token has expired
+        if (new Date(google_expiry_at) <= currentTime) {
+          await refreshGoogleAccessToken(user_id);
+        } else {
+          console.log("Google token still valid, no need to refresh");
+        }
+      } else if (platform_name === "zoom") {
+        // Check if Zoom token has expired
+        if (new Date(zoom_expiry_at) <= currentTime) {
+          await refreshZoomAccessToken(user_id);
+        } else {
+          console.log("Zoom token still valid, no need to refresh");
+        }
+      }
+    } catch (tokenRefreshError) {
+      console.error("Token refresh failed:", tokenRefreshError);
+    }
+
+    // after we inserted the new token we're fetching the user again
+    const afterUpdatedToken = await pool.query(
+      "SELECT * FROM users WHERE id = $1",
+      [user_id]
+    );
+    const googleAccessToken = afterUpdatedToken.rows[0].google_access_token;
+    const zoomAccessToken = afterUpdatedToken.rows[0].zoom_access_token;
+
     const event_type = one_to_one ? "One to One" : "One to Many";
 
     if (type === "online") {
@@ -89,10 +121,9 @@ exports.scheduleEvent = async (req, res) => {
       platform_name === "google"
     ) {
       try {
-        // Function to delete the event from Google Calendar
         await deleteGoogleCalendarEvent(
           googleCalendarEventId,
-          user.rows[0].google_access_token
+          googleAccessToken
         );
         console.log("Google Calendar event deleted successfully");
       } catch (error) {
@@ -101,8 +132,7 @@ exports.scheduleEvent = async (req, res) => {
     }
     if (zoomMeetingId && type === "online" && platform_name === "zoom") {
       try {
-        // Function to delete the event from Google Calendar
-        await deleteZoomMeeting(user.rows[0].zoom_access_token, zoomMeetingId);
+        await deleteZoomMeeting(zoomAccessToken, zoomMeetingId);
         console.log("Zoom event deleted successfully");
       } catch (error) {
         console.error("Failed to delete zoom event:", error);

@@ -144,11 +144,12 @@ CREATE TABLE IF NOT EXISTS schedule (
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     scheduling_time TIMESTAMP WITH TIME ZONE NOT NULL,
     cancellation_reason TEXT,
+    rescheduled_reason TEXT,
     google_calendar_event_id TEXT,
     zoom_meeting_id TEXT,
     zoom_meeting_link TEXT,
     status VARCHAR(50) DEFAULT 'pending',
-    -- can be pending, confirmed, cancelled
+    -- can be pending, scheduled, rescheduled, cancelled
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -163,9 +164,15 @@ CREATE TABLE IF NOT EXISTS question_responses (
 );
 CREATE TABLE IF NOT EXISTS invitee(
     id SERIAL PRIMARY KEY,
-    schedule_id INT NOT NULL REFERENCES schedule(id) ON DELETE CASCADE,
     email TEXT NULL UNIQUE,
     name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS invitee_scheduled(
+    id SERIAL PRIMARY KEY,
+    invitee_id INT NOT NULL REFERENCES invitee(id) ON DELETE CASCADE,
+    schedule_id INT NOT NULL REFERENCES schedule(id) ON DELETE CASCADE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
