@@ -14,9 +14,10 @@ const {
 const sendEmail = require("../../lib/sendEmail");
 const { convertScheduleDateTime } = require("../../util/convertDateTimes");
 const {
-  hostEmailEjsData,
+  // hostEmailEjsData,
   renderEJSTemplate,
   createAddToCalendarLink,
+  renderEmailData,
 } = require("../../util/emailData");
 const {
   hostEmailPath,
@@ -83,7 +84,6 @@ exports.create = async (req, res) => {
     );
 
     const scheduling_id = schedulingResult.rows[0].id;
-    console.log("ID: ", scheduling_id);
 
     // Store inserted responses with question details
     let insertedResponsesWithQuestions = [];
@@ -164,8 +164,6 @@ exports.create = async (req, res) => {
     // Convert scheduling_time to a Date object
     const startDateTime = new Date(scheduling_time);
 
-    // Calculate endDateTime by adding the duration to startDateTime
-    // Assuming event_duration is in minutes
     const endDateTime = new Date(
       startDateTime.getTime() + event_duration * 60000
     );
@@ -280,7 +278,7 @@ exports.create = async (req, res) => {
     const addCalendarLink = createAddToCalendarLink(eventDetails);
 
     try {
-      const emailEjsData = hostEmailEjsData(
+      const { hostEmailRender, inviteeEmailRender } = await renderEmailData(
         host_name,
         event_type,
         event_name,
@@ -295,18 +293,6 @@ exports.create = async (req, res) => {
         linkForSyncOnlinePlatforms,
         addCalendarLink
       );
-
-      // Render the EJS templates for host and invitee emails
-      const hostEmailRender = await renderEJSTemplate(
-        hostEmailPath,
-        emailEjsData
-      );
-      const inviteeEmailRender = await renderEJSTemplate(
-        inviteEmailPath,
-        emailEjsData
-      );
-
-      // Prepare the email data object
       const emailData = {
         hostEmail: host_email,
         inviteeEmail: invitee_email,
@@ -591,7 +577,7 @@ exports.update = async (req, res) => {
     const addCalendarLink = createAddToCalendarLink(eventDetails);
 
     try {
-      const emailEjsData = hostEmailEjsData(
+      const { hostEmailRender, inviteeEmailRender } = await renderEmailData(
         host_name,
         event_type,
         event_name,
@@ -606,16 +592,6 @@ exports.update = async (req, res) => {
         linkForSyncOnlinePlatforms,
         addCalendarLink,
         reschedule_reason
-      );
-
-      // Render the EJS templates for host and invitee emails
-      const hostEmailRender = await renderEJSTemplate(
-        hostRescheduleEmailPath,
-        emailEjsData
-      );
-      const inviteeEmailRender = await renderEJSTemplate(
-        inviteRescheduleEmailPath,
-        emailEjsData
       );
 
       // Prepare the email data object

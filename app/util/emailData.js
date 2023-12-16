@@ -1,6 +1,7 @@
 const ejs = require("ejs");
+const { inviteEmailPath, hostEmailPath } = require("./paths");
 
-exports.renderEJSTemplate = async (templatePath, data) => {
+const renderEJSTemplate = async (templatePath, data) => {
   return new Promise((resolve, reject) => {
     ejs.renderFile(templatePath, data, (err, htmlContent) => {
       if (err) {
@@ -11,7 +12,7 @@ exports.renderEJSTemplate = async (templatePath, data) => {
   });
 };
 
-exports.hostEmailEjsData = (
+const hostEmailEjsData = (
   host_name,
   event_type,
   event_name,
@@ -28,9 +29,9 @@ exports.hostEmailEjsData = (
   reschedule_reason
 ) => {
   const inviteeName =
-    responses?.find((r) => r?.questionType === "name")?.text || invitee_name ;
+    responses?.find((r) => r?.questionType === "name")?.text || invitee_name;
   const inviteeEmail =
-    responses?.find((r) => r?.questionType === "email")?.text || invitee_email ;
+    responses?.find((r) => r?.questionType === "email")?.text || invitee_email;
 
   return {
     host_name,
@@ -52,10 +53,7 @@ exports.hostEmailEjsData = (
   };
 };
 
-
-
-
-exports.createAddToCalendarLink = (eventDetails) => {
+const createAddToCalendarLink = (eventDetails) => {
   const formatDate = (date) => {
     return date.toISOString().replace(/-|:|\.\d+/g, "");
   };
@@ -72,3 +70,51 @@ exports.createAddToCalendarLink = (eventDetails) => {
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${summary}&dates=${startTime}/${endTime}&details=${details}&location=${location}`;
 };
 
+const renderEmailData = async (
+  host_name,
+  event_type,
+  event_name,
+  invitee_name ,
+  invitee_email,
+  responses,
+  scheduling_time,
+  location,
+  cancelUrl,
+  rescheduleUrl,
+  isErrorCreatingOnlineEvent,
+  linkForSyncOnlinePlatforms,
+  addCalendarLink
+) => {
+  const emailEjsData = hostEmailEjsData(
+    host_name,
+    event_type,
+    event_name,
+    invitee_name,
+    invitee_email,
+    responses,
+    scheduling_time,
+    location,
+    cancelUrl,
+    rescheduleUrl,
+    isErrorCreatingOnlineEvent,
+    linkForSyncOnlinePlatforms,
+    addCalendarLink
+  );
+
+  const hostEmailRender = await renderEJSTemplate(hostEmailPath, emailEjsData);
+  const inviteeEmailRender = await renderEJSTemplate(
+    inviteEmailPath,
+    emailEjsData
+  );
+  return {
+    hostEmailRender,
+    inviteeEmailRender,
+  };
+};
+
+
+module.exports = {
+  renderEJSTemplate,
+  createAddToCalendarLink,
+  renderEmailData,
+};

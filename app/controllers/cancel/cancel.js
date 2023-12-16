@@ -23,10 +23,10 @@ exports.scheduleEvent = async (req, res) => {
     scheduling_time,
   } = req.body;
 
-  if (!reason || !scheduling_id) {
+  if (!reason || !scheduling_id || !platform_name || !type) {
     return res.status(400).json({
       status: false,
-      message: "scheduling_id & Reason is required",
+      message: "scheduling_id, platform_name, type & Reason is required",
     });
   }
 
@@ -49,13 +49,13 @@ exports.scheduleEvent = async (req, res) => {
         .json({ status: false, message: "schedule event not found" });
     }
 
-    if (schedulingCheck.rows[0].status === "cancelled") {
-      await pool.query("ROLLBACK");
-      return res.status(400).json({
-        status: false,
-        message: "schedule event is already cancelled",
-      });
-    }
+    // if (schedulingCheck.rows[0].status === "cancelled") {
+    //   await pool.query("ROLLBACK");
+    //   return res.status(400).json({
+    //     status: false,
+    //     message: "schedule event is already cancelled",
+    //   });
+    // }
 
     const googleCalendarEventId =
       schedulingCheck.rows[0].google_calendar_event_id;
