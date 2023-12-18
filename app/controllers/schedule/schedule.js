@@ -1,22 +1,60 @@
 const { pool } = require("../../config/db.config");
-const { setGoogleCalendarEvent, createZoomMeeting } = require("../../lib/integrateCalendar");
+const { generateICSString } = require("../../lib/createICSFile");
+const {
+  setGoogleCalendarEvent,
+  createZoomMeeting,
+  updateGoogleCalendarEvent,
+  updateZoomMeeting,
+} = require("../../lib/integrateCalendar");
 
 const {
   refreshGoogleAccessToken,
   refreshZoomAccessToken,
 } = require("../../lib/refreshTokens");
+const sendEmail = require("../../lib/sendEmail");
 const { convertScheduleDateTime } = require("../../util/convertDateTimes");
+const {
+  hostEmailEjsData,
+  renderEJSTemplate,
+  createAddToCalendarLink,
+} = require("../../util/emailData");
+const {
+  hostEmailPath,
+  inviteEmailPath,
+  hostRescheduleEmailPath,
+  inviteRescheduleEmailPath,
+} = require("../../util/paths");
+const jwt = require("jsonwebtoken");
+const {
+  validateRequestBody,
+  extractInviteeDetails,
+  insertScheduling,
+  checkUserAndEventExistence,
+  sendEmailNotifications,
+  createGoogleCalendarEvent,
+  createZoomEvent,
+} = require("../../util/schedulingHandler");
 
 exports.create = async (req, res) => {
-  const { event_id, user_id, selected_date, selected_time, responses } =
-    req.body;
+  const {
+    event_id,
+    user_id,
+    selected_date,
+    selected_time,
+    responses,
+    type,
+    platform_name,
+  } = req.body;
 
-  if (!event_id || !user_id || !selected_date || !selected_time || !responses) {
-    return res.status(400).json({
-      status: false,
-      message:
-        "event_id, user_id, selected_date, selected_time, and responses are required",
-    });
+  const validationError = validateRequestBody(req.body);
+  if (validationError) {
+    return res.status(400).json({ status: false, message: validationError });
+  }
+  const { invitee_email, invitee_name, error } = extractInviteeDetails(
+    req.body.responses
+  );
+  if (error) {
+    return res.status(400).json({ status: false, message: error });
   }
   const dateTimeStr = `${selected_date}T${convertScheduleDateTime(
     selected_time
@@ -26,12 +64,11 @@ exports.create = async (req, res) => {
 
   try {
     // Check if user and event exist
-    const userCheck = await pool.query("SELECT * FROM users WHERE id = $1", [
+    const { userCheck, eventCheck } = await checkUserAndEventExistence(
       user_id,
-    ]);
-    const eventCheck = await pool.query("SELECT * FROM events WHERE id = $1", [
-      event_id,
-    ]);
+      event_id
+    );
+
     if (userCheck.rows.length === 0 || eventCheck.rows.length === 0) {
       return res
         .status(400)
@@ -39,11 +76,14 @@ exports.create = async (req, res) => {
     }
 
     // Insert into scheduling table
-    const schedulingResult = await pool.query(
-      "INSERT INTO schedule(event_id, user_id, scheduling_time) VALUES($1, $2, $3) RETURNING *",
-      [event_id, user_id, scheduling_time]
+    const schedulingResult = await insertScheduling(
+      req.body.event_id,
+      req.body.user_id,
+      scheduling_time
     );
+
     const scheduling_id = schedulingResult.rows[0].id;
+    console.log("ID: ", scheduling_id);
 
     // Store inserted responses with question details
     let insertedResponsesWithQuestions = [];
@@ -68,11 +108,58 @@ exports.create = async (req, res) => {
       });
     }
 
-    const user = userCheck.rows[0];
-    // const user_id = userCheck.rows[0].id;
+    const host_name = userCheck.rows[0].full_name;
+    const host_email = userCheck.rows[0].email;
     const event_name = eventCheck.rows[0].name;
     const event_duration = eventCheck.rows[0].duration;
+    const event_types = eventCheck.rows[0].one_to_one;
+    const event_description = eventCheck.rows[0].description;
+    const event_type = event_types
+      ? "One to One Meeting"
+      : "One to Many meetings";
     // const event_id = eventCheck.rows[0].ide
+
+    // Check if the invitee already exists
+    const existingInviteeResult = await pool.query(
+      "SELECT * FROM invitee WHERE email = $1",
+      [invitee_email]
+    );
+
+    let invitee_id;
+    let insertInvitee = null;
+
+    if (existingInviteeResult.rows.length > 0) {
+      // Invitee already exists, use existing ID and result
+      invitee_id = existingInviteeResult.rows[0].id;
+      insertInvitee = existingInviteeResult;
+    } else {
+      // Insert new invitee and get ID
+      insertInvitee = await pool.query(
+        "INSERT INTO invitee(email, name) VALUES($1, $2) RETURNING *",
+        [invitee_email, invitee_name]
+      );
+      invitee_id = insertInvitee.rows[0].id;
+    }
+
+    // Insert into invitee_scheduled
+    const insertInviteeScheduled = await pool.query(
+      "INSERT INTO invitee_scheduled(schedule_id, invitee_id) VALUES($1, $2) RETURNING *",
+      [scheduling_id, invitee_id]
+    );
+
+    const token_id = jwt.sign({ id: scheduling_id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+    const token_invitee_id = jwt.sign(
+      { id: invitee_id },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "1h",
+      }
+    );
+
+    const cancelUrl = `${process.env.CLIENT_URL}/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
+    const rescheduleUrl = `${process.env.CLIENT_URL}/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
 
     // Convert scheduling_time to a Date object
     const startDateTime = new Date(scheduling_time);
@@ -83,33 +170,161 @@ exports.create = async (req, res) => {
       startDateTime.getTime() + event_duration * 60000
     );
 
-    const google_access_token = user.google_access_token;
-
-    await refreshGoogleAccessToken(user_id);
-
     // Prepare the event details for Google Calendar
-    const eventDetails = {
+    let eventDetails = {
       name: event_name,
       startDateTime: startDateTime.toISOString(),
       endDateTime: endDateTime.toISOString(),
+      duration: event_duration,
+      description: event_description,
+      invitee_email,
+      invitee_name,
+      host_name,
+      host_email,
     };
 
-    // create a function to set the availability of event on google calendar
-    // I have setup the google console
+    let google_meet_link = "",
+      zoom_meeting_link = "",
+      google_calendar_event_id = "",
+      zoom_meeting_id = "";
+
+    let isErrorCreatingOnlineEvent = false;
+
+    const google_expiry_at = userCheck.rows[0].google_expiry_at;
+    const zoom_expiry_at = userCheck.rows[0].zoom_expiry_at;
+    const currentTime = new Date();
+
     try {
-      const calendarEvent = await setGoogleCalendarEvent(user, eventDetails);
-      console.log("Google Calendar Event Created:", calendarEvent);
-    } catch (error) {
-      console.error("Failed to create Google Calendar event:", error);
-      return "Failed to scheduled on Google Calendar";
+      if (platform_name === "google") {
+        // Check if Google token has expired
+        if (new Date(google_expiry_at) <= currentTime) {
+          await refreshGoogleAccessToken(user_id);
+        } else {
+          console.log("Google token still valid, no need to refresh");
+        }
+      } else if (platform_name === "zoom") {
+        // Check if Zoom token has expired
+        if (new Date(zoom_expiry_at) <= currentTime) {
+          await refreshZoomAccessToken(user_id);
+        } else {
+          console.log("Zoom token still valid, no need to refresh");
+        }
+      }
+    } catch (tokenRefreshError) {
+      console.error("Token refresh failed:", tokenRefreshError);
     }
-    await refreshZoomAccessToken(user_id);
+
+    // after we inserted the new token we're fetching the user again
+    const afterUpdatedToken = await pool.query(
+      "SELECT * FROM users WHERE id = $1",
+      [user_id]
+    );
+    const userAfterNewTokens = afterUpdatedToken.rows[0];
+
     try {
-      const calendarEvent = await createZoomMeeting(user, eventDetails);
-      console.log("Zoom Calendar Event Created:", calendarEvent);
+      let eventCreationResult;
+
+      if (type === "online") {
+        if (platform_name === "google") {
+          eventCreationResult = await createGoogleCalendarEvent(
+            userAfterNewTokens,
+            eventDetails
+          );
+          await pool.query(
+            "UPDATE schedule SET google_calendar_event_id = $1 RETURNING *",
+            [eventCreationResult.eventData?.id]
+          );
+        } else if (platform_name === "zoom") {
+          eventCreationResult = await createZoomEvent(
+            userAfterNewTokens,
+            eventDetails
+          );
+          await pool.query(
+            "UPDATE schedule SET zoom_meeting_link = $1, zoom_meeting_id = $2 RETURNING *",
+            [
+              eventCreationResult.eventData?.join_url,
+              eventCreationResult.eventData?.id,
+            ]
+          );
+        }
+
+        if (!eventCreationResult.success) {
+          isErrorCreatingOnlineEvent = true;
+          console.log("Failed to create the event on", platform_name);
+        }
+
+        if (platform_name === "google") {
+          google_meet_link = eventCreationResult.eventData?.meetLink;
+          google_calendar_event_id = eventCreationResult.eventData?.id;
+        } else if (platform_name === "zoom") {
+          zoom_meeting_link = eventCreationResult.eventData?.join_url;
+          zoom_meeting_id = eventCreationResult.eventData?.id;
+        }
+      }
     } catch (error) {
-      console.error("Failed to create Zoom Calendar event:", error);
-      return "Failed to scheduled on Zoom Calendar";
+      console.log(`Error handling online event creation: ${error}`);
+    }
+    const linkForSyncOnlinePlatforms = `${process.env.SERVER_URL}/platform/connect-${platform_name}?user_id=${user_id}`;
+    const platform_meeting_link = google_meet_link
+      ? google_meet_link
+      : zoom_meeting_link;
+
+    const location = {
+      type,
+      platform_name,
+      google_meet_link: platform_meeting_link,
+    };
+
+    eventDetails["location"] = location;
+
+    const addCalendarLink = createAddToCalendarLink(eventDetails);
+
+    try {
+      const emailEjsData = hostEmailEjsData(
+        host_name,
+        event_type,
+        event_name,
+        undefined,
+        undefined,
+        responses,
+        scheduling_time,
+        location,
+        cancelUrl,
+        rescheduleUrl,
+        isErrorCreatingOnlineEvent,
+        linkForSyncOnlinePlatforms,
+        addCalendarLink
+      );
+
+      // Render the EJS templates for host and invitee emails
+      const hostEmailRender = await renderEJSTemplate(
+        hostEmailPath,
+        emailEjsData
+      );
+      const inviteeEmailRender = await renderEJSTemplate(
+        inviteEmailPath,
+        emailEjsData
+      );
+
+      // Prepare the email data object
+      const emailData = {
+        hostEmail: host_email,
+        inviteeEmail: invitee_email,
+        hostEmailContent: hostEmailRender,
+        inviteeEmailContent: inviteeEmailRender,
+        type: "schedule",
+        attachments: [
+          {
+            filename: "invite.ics",
+            content: generateICSString(eventDetails),
+            contentType: "text/calendar",
+          },
+        ],
+      };
+
+      await sendEmailNotifications(emailData);
+    } catch (sendEmailError) {
+      console.error(sendEmailError);
     }
 
     res.json({
@@ -117,6 +332,8 @@ exports.create = async (req, res) => {
       message: "Event scheduled Successfully!",
       scheduling: schedulingResult.rows[0],
       responses_with_questions: insertedResponsesWithQuestions,
+      inviteeDetails: insertInvitee.rows[0],
+      inviteeScheduled: insertInviteeScheduled.rows[0],
     });
   } catch (err) {
     console.error(err.message);
@@ -129,9 +346,13 @@ exports.update = async (req, res) => {
     event_id,
     user_id,
     schedule_id,
+    invitee_id,
     selected_date,
     selected_time,
+    reschedule_reason,
     responses,
+    type,
+    platform_name,
   } = req.body;
 
   if (
@@ -140,12 +361,13 @@ exports.update = async (req, res) => {
     !schedule_id ||
     !selected_date ||
     !selected_time ||
-    !responses
+    !responses ||
+    !platform_name
   ) {
     return res.status(400).json({
       status: false,
       message:
-        "event_id, user_id, schedule_id, selected_date, selected_time, and responses are required",
+        "event_id, user_id, schedule_id, selected_date, selected_time, platform_name and responses are required",
     });
   }
 
@@ -159,6 +381,21 @@ exports.update = async (req, res) => {
       "SELECT * FROM schedule WHERE id = $1 AND event_id = $2",
       [schedule_id, event_id]
     );
+    const invitees = await pool.query("SELECT * FROM invitee WHERE id = $1", [
+      invitee_id,
+    ]);
+
+    if (invitees.rows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "Invitee not found",
+      });
+    }
+
+    const invitee_email = invitees.rows[0].email;
+    const invitee_name = invitees.rows[0].name;
+
+    console.log({ invitee_email: invitee_email, invitee_name: invitee_name });
 
     if (existingSchedule.rows.length === 0) {
       return res.status(404).json({
@@ -166,36 +403,240 @@ exports.update = async (req, res) => {
         message: "Schedule not found or does not match the event ID",
       });
     }
+    const userCheck = await pool.query("SELECT * FROM users WHERE id = $1", [
+      user_id,
+    ]);
+
+    const eventCheck = await pool.query("SELECT * FROM events WHERE id = $1", [
+      event_id,
+    ]);
+    if (userCheck.rows.length === 0 || eventCheck.rows.length === 0) {
+      return res
+        .status(400)
+        .json({ status: false, message: "User or event not found" });
+    }
 
     const schedule = await pool.query(
-      "UPDATE schedule SET scheduling_time = $1 WHERE id = $2 AND event_id = $3 RETURNING *",
-      [scheduling_time, schedule_id, event_id]
+      "UPDATE schedule SET scheduling_time = $1, rescheduled_reason = $2, status = $3 WHERE id = $4 AND event_id = $5 RETURNING *",
+      [scheduling_time, reschedule_reason, "rescheduled", schedule_id, event_id]
     );
 
-    let responseDetails = []; // Array to store details of each response
+    let responseDetails = [];
+    console.log(responses);
+    if (responses?.length === 0) {
+      for (const response of responses) {
+        const { question_id, text, options } = response;
+        let responseResult;
 
-    for (const response of responses) {
-      const { question_id, text, options } = response;
-      let responseResult;
+        const existingResponse = await pool.query(
+          "SELECT * FROM question_responses WHERE schedule_id = $1 AND question_id = $2",
+          [schedule_id, question_id]
+        );
 
-      const existingResponse = await pool.query(
-        "SELECT * FROM question_responses WHERE schedule_id = $1 AND question_id = $2",
-        [schedule_id, question_id]
+        if (existingResponse.rows.length > 0) {
+          responseResult = await pool.query(
+            "UPDATE question_responses SET text = $1, options = $2 WHERE schedule_id = $3 AND question_id = $4 RETURNING *",
+            [text, options || [], schedule_id, question_id]
+          );
+        } else {
+          responseResult = await pool.query(
+            "INSERT INTO question_responses (schedule_id, question_id, text, options) VALUES ($1, $2, $3, $4) RETURNING *",
+            [schedule_id, question_id, text, options || []]
+          );
+        }
+
+        responseDetails.push(responseResult.rows[0]);
+      }
+    }
+
+    const googleCalendarEventId =
+      existingSchedule.rows[0].google_calendar_event_id;
+    const zoom_meeting_id = existingSchedule.rows[0].zoom_meeting_id;
+    const host_name = userCheck.rows[0].full_name;
+    const host_email = userCheck.rows[0].email;
+    const zoom_access_token = userCheck.rows[0].zoom_access_token;
+    const event_name = eventCheck.rows[0].name;
+    const event_duration = eventCheck.rows[0].duration;
+    const event_types = eventCheck.rows[0].one_to_one;
+    const event_description = eventCheck.rows[0].event_description;
+    const event_type = event_types
+      ? "One to One Meeting"
+      : "One to Many meetings";
+    // Convert scheduling_time to a Date object
+    const startDateTime = new Date(scheduling_time);
+
+    // Calculate endDateTime by adding the duration to startDateTime
+    // Assuming event_duration is in minutes
+    const endDateTime = new Date(
+      startDateTime.getTime() + event_duration * 60000
+    );
+
+    const token_id = jwt.sign({ id: schedule_id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
+    const token_invitee_id = jwt.sign(
+      { id: invitee_id },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "1h",
+      }
+    );
+
+    const cancelUrl = `${process.env.CLIENT_URL}/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
+    const rescheduleUrl = `${process.env.CLIENT_URL}/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
+
+    let google_meet_link,
+      zoom_meeting_link,
+      isErrorCreatingOnlineEvent = false;
+
+    let eventDetails = {
+      name: event_name,
+      startDateTime: startDateTime.toISOString(),
+      endDateTime: endDateTime.toISOString(),
+      duration: event_duration,
+      description: event_description,
+      invitee_email,
+      invitee_name,
+      host_name,
+      host_email,
+    };
+
+    const google_expiry_at = userCheck.rows[0].google_expiry_at;
+    const zoom_expiry_at = userCheck.rows[0].zoom_expiry_at;
+    const currentTime = new Date();
+
+    try {
+      if (platform_name === "google") {
+        // Check if Google token has expired
+        if (new Date(google_expiry_at) <= currentTime) {
+          await refreshGoogleAccessToken(user_id);
+        } else {
+          console.log("Google token still valid, no need to refresh");
+        }
+      } else if (platform_name === "zoom") {
+        // Check if Zoom token has expired
+        if (new Date(zoom_expiry_at) <= currentTime) {
+          await refreshZoomAccessToken(user_id);
+        } else {
+          console.log("Zoom token still valid, no need to refresh");
+        }
+      }
+    } catch (tokenRefreshError) {
+      console.error("Token refresh failed:", tokenRefreshError);
+    }
+
+    // after we inserted the new token we're fetching the user again
+    const afterUpdatedToken = await pool.query(
+      "SELECT * FROM users WHERE id = $1",
+      [user_id]
+    );
+    const googleAccessToken = afterUpdatedToken.rows[0].google_access_token;
+    const zoomAccessToken = afterUpdatedToken.rows[0].zoom_access_token;
+
+    console.log("Google ID: " + googleCalendarEventId);
+    if (
+      googleCalendarEventId &&
+      type === "online" &&
+      platform_name === "google"
+    ) {
+      try {
+        // Function to delete the event from Google Calendar
+        const calendarEvent = await updateGoogleCalendarEvent(
+          googleAccessToken,
+          googleCalendarEventId,
+          eventDetails
+        );
+        google_meet_link = calendarEvent?.meetLink;
+        //  google_calendar_event_id = calendarEvent?.eventData?.id;
+
+        console.log("Google Calendar event updated successfully");
+      } catch (error) {
+        console.error("Failed to delete Google Calendar event:", error);
+      }
+    }
+
+    if (zoom_meeting_id && type === "online" && platform_name === "zoom") {
+      console.log(
+        "Now I am in the if statement to update the event",
+        platform_name
+      );
+      try {
+        const calendarEvent = await updateZoomMeeting(
+          zoomAccessToken,
+          zoom_meeting_id,
+          eventDetails
+        );
+        console.log("Zoom Calendar Event Updated:", calendarEvent);
+      } catch (error) {
+        console.error("Failed to update Zoom Calendar event:", error);
+        return "Failed to scheduled on Zoom Calendar";
+      }
+    }
+
+    const platform_meeting_link = google_meet_link
+      ? google_meet_link
+      : zoom_meeting_link;
+
+    const location = {
+      type,
+      platform_name,
+      google_meet_link: platform_meeting_link,
+    };
+
+    eventDetails["location"] = location;
+
+    const linkForSyncOnlinePlatforms = `${process.env.SERVER_URL}/platform/connect-${platform_name}?user_id=${user_id}`;
+
+    const addCalendarLink = createAddToCalendarLink(eventDetails);
+
+    try {
+      const emailEjsData = hostEmailEjsData(
+        host_name,
+        event_type,
+        event_name,
+        invitee_email,
+        invitee_name,
+        responses,
+        scheduling_time,
+        location,
+        cancelUrl,
+        rescheduleUrl,
+        isErrorCreatingOnlineEvent,
+        linkForSyncOnlinePlatforms,
+        addCalendarLink,
+        reschedule_reason
       );
 
-      if (existingResponse.rows.length > 0) {
-        responseResult = await pool.query(
-          "UPDATE question_responses SET text = $1, options = $2 WHERE schedule_id = $3 AND question_id = $4 RETURNING *",
-          [text, options || [], schedule_id, question_id]
-        );
-      } else {
-        responseResult = await pool.query(
-          "INSERT INTO question_responses (schedule_id, question_id, text, options) VALUES ($1, $2, $3, $4) RETURNING *",
-          [schedule_id, question_id, text, options || []]
-        );
-      }
+      // Render the EJS templates for host and invitee emails
+      const hostEmailRender = await renderEJSTemplate(
+        hostRescheduleEmailPath,
+        emailEjsData
+      );
+      const inviteeEmailRender = await renderEJSTemplate(
+        inviteRescheduleEmailPath,
+        emailEjsData
+      );
 
-      responseDetails.push(responseResult.rows[0]); // Store the response details
+      // Prepare the email data object
+      const emailData = {
+        hostEmail: host_email,
+        inviteeEmail: invitee_email,
+        hostEmailContent: hostEmailRender,
+        inviteeEmailContent: inviteeEmailRender,
+        type: "reschedule",
+        attachments: [
+          {
+            filename: "invite.ics",
+            content: generateICSString(eventDetails),
+            contentType: "text/calendar",
+          },
+        ],
+      };
+
+      await sendEmailNotifications(emailData);
+    } catch (sendEmailError) {
+      console.error(sendEmailError);
     }
 
     res.json({
@@ -211,7 +652,7 @@ exports.update = async (req, res) => {
 };
 
 exports.get = async (req, res) => {
-  const { id } = req.params;
+  const id = parseInt(req.params.id, 10);
 
   try {
     // Fetch the scheduled event
@@ -230,7 +671,19 @@ exports.get = async (req, res) => {
     const event_id = scheduledEvent.rows[0].event_id;
 
     const getEventDetails = await pool.query(
-      "SELECT * FROM events WHERE id = $1",
+      `
+  SELECT e.*, 
+    json_build_object(
+      'address', l.address, 
+      'post_code', l.post_code, 
+      'location', l.location,  
+      'type', l.type, 
+      'platform_name', l.platform_name
+    ) as location 
+  FROM events e 
+  LEFT JOIN locations l ON e.id = l.event_id 
+  WHERE e.id = $1
+`,
       [event_id]
     );
 
@@ -281,10 +734,6 @@ exports.get = async (req, res) => {
       "SELECT full_name, email FROM users WHERE id = $1",
       [user_id]
     );
-
-    // if (getEventDetails.rowCount === 0) {
-    //   return res.status(404).json({ status: false, message: "Event not found" });
-    // }
 
     // Fetch questions and responses together
     const questionsAndResponses = await pool.query(

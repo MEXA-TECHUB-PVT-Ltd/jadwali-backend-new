@@ -4,7 +4,13 @@ const { refreshGoogleAccessToken } = require("../../lib/refreshTokens");
 const {
   postDateRangeToGoogleCalendar,
 } = require("../../lib/integrateCalendar");
+const slugify = require("slugify");
 
+const jwt = require("jsonwebtoken");
+
+const createEventToken = (eventId) => {
+  return jwt.sign({ eventId }, process.env.JWT_SECRET, { expiresIn: "1h" });
+};
 // TODO: Checks for creating more than 6 events and one to one and one to many events
 // Function to check if user exists
 const userExist = async (user_id) => {
@@ -70,6 +76,19 @@ exports.create = async (req, res) => {
         .json({ status: false, message: "User does not exist" });
     }
 
+    const user_query = "SELECT * FROM users WHERE id = $1";
+    const getUser = await pool.query(user_query, [user_id]);
+
+    const username = getUser.rows[0].full_name || getUser.rows[0].email;
+
+    let slug = slugify(name.toLowerCase(), "-");
+
+    const eventNameQuery = "SELECT COUNT(*) FROM events WHERE name = $1";
+    const eventNameCount = await pool.query(eventNameQuery, [name]);
+    if (parseInt(eventNameCount.rows[0].count) > 0) {
+      slug += `-${eventNameCount.rows[0].count}`;
+    }
+
     const eventCount = await getUserEventCount(user_id);
     if (eventCount >= 6) {
       return res.status(400).json({
@@ -77,16 +96,8 @@ exports.create = async (req, res) => {
         message: "Cannot create more than 6 events per user",
       });
     }
-
-    // const duplicatedEvents = await duplicatedEvent(name, user_id);
-    // if (duplicatedEvents) {
-    //   return res.status(409).json({
-    //     status: false,
-    //     message: "Event is already created with this name",
-    //   });
-    // }
     const insertQuery =
-      "INSERT INTO events (user_id, name, event_price, deposit_price, description, duration, one_to_one) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *";
+      "INSERT INTO events (user_id, name, event_price, deposit_price, description, duration, one_to_one, slug) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *";
     const values = [
       user_id,
       name,
@@ -95,14 +106,20 @@ exports.create = async (req, res) => {
       description,
       duration,
       one_to_one,
+      slug,
     ];
     const result = await pool.query(insertQuery, values);
+    const isFree = "free-schedule";
+    const webviewURL = `${
+      process.env.CLIENT_URL
+    }/${isFree}/${username.toLowerCase()}/${slug}`;
 
     // Return success response
     return res.status(201).json({
       status: true,
       message: "Event created successfully",
       eventId: result.rows,
+      webviewURL,
     });
   } catch (error) {
     console.log(error);
@@ -196,7 +213,7 @@ exports.update = async (req, res) => {
 };
 
 exports.getAllUserEvents = async (req, res) => {
-  const { id } = req.params;
+  const id = parseInt(req.params.id);
 
   if (!id) {
     return res.status(400).json({
@@ -378,24 +395,22 @@ exports.createDataRange = async (req, res) => {
         .json({ status: false, message: "Event not found" });
     }
 
-    
-
     let query;
     let queryParams;
-      query = `
+    query = `
         UPDATE events 
         SET invite_in_type = $1, book_leading_time = $2, before_time = $3, after_time = $4, date_range = $5, updated_at = NOW() 
         WHERE id = $6
         RETURNING *;
       `;
-      queryParams = [
-        type,
-        book_leading_time,
-        before_time,
-        after_time,
-        custom_date_range,
-        event_id,
-      ];
+    queryParams = [
+      type,
+      book_leading_time,
+      before_time,
+      after_time,
+      custom_date_range,
+      event_id,
+    ];
 
     const result = await pool.query(query, queryParams);
 
@@ -561,6 +576,120 @@ WHERE e.id = $1;
         message: "No data found for the specified event ID",
       });
     }
+
+    return res.status(200).json({
+      status: true,
+      message: "Event data fetched successfully",
+      user: getUser.rows[0],
+      result: result.rows[0],
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+exports.getAllEventDataBySlug = async (req, res) => {
+  const { slug } = req.params;
+
+  if (!slug) {
+    return res.status(400).json({
+      status: false,
+      message: "slug is required",
+    });
+  }
+
+  try {
+    const query = `
+SELECT 
+    e.*,
+    (SELECT json_agg(
+        json_build_object(
+            'id', l.id,
+            'address', l.address,
+            'post_code', l.post_code,
+            'location', l.location,
+            'type', l.type,
+            'platform_name', l.platform_name,
+            'created_at', l.created_at,
+            'updated_at', l.updated_at
+        )
+    )
+    FROM locations l
+    WHERE l.event_id = e.id) AS locations,
+
+(SELECT json_agg(
+    json_build_object(
+        'id', q.id,
+        'text', q.text,
+        'options', q.options,
+        'type', q.type,
+        'is_required', q.is_required,
+        'status', q.status,
+        'others', q.others,
+        'created_at', q.created_at,
+        'updated_at', q.updated_at
+    ) ORDER BY q.id
+)
+FROM questions q
+WHERE q.event_id = e.id) AS questions,
+
+
+
+    (SELECT json_agg(
+        json_build_object(
+            'id', ap.id,
+            'profile_name', ap.profile_name,
+            'unique_id', ap.unique_id,
+            'uuid', ap.uuid,
+            'created_at', ap.created_at,
+            'updated_at', ap.updated_at,
+            'availability', (
+                SELECT json_agg(
+                    json_build_object(
+                        'id', a.id,
+                        'day_of_week', a.day_of_week,
+                        'is_available', a.is_available,
+                        'time_slots', (
+                            SELECT json_agg(
+                                json_build_object(
+                                    'id', ts.id,
+                                    'start_time', ts.start_time,
+                                    'end_time', ts.end_time
+                                )
+                            )
+                            FROM time_slots ts
+                            WHERE ts.availability_id = a.id
+                        )
+                    )
+                )
+                FROM availability a
+                WHERE a.profile_id = ap.id
+            )
+        )
+    )
+    FROM availability_profiles ap
+    WHERE ap.id = e.selected_avail_id) AS availability_profiles
+
+FROM 
+    events e
+WHERE e.slug = $1;
+
+    `;
+    const result = await pool.query(query, [slug]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No data found for the specified slug",
+      });
+    }
+    const user_id = result.rows[0].user_id;
+
+    const getUser = await pool.query(
+      "SELECT full_name, email FROM users WHERE id = $1",
+      [user_id]
+    );
 
     return res.status(200).json({
       status: true,

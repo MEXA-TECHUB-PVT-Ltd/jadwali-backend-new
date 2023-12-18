@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style type="text/css">
+      body {
+        font-family: "Roboto", sans-serif;
+        background-color: #f4f4f4;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+      }
+      .email-container {
+        background-color: #ffffff;
+        margin: 0 auto;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+      }
+      .email-content {
+        margin-bottom: 20px;
+      }
+      a {
+        color: #007bff !important;
+        text-decoration: none;
+      }
+      .email-footer {
+        text-align: center;
+        margin-top: 30px;
+        font-size: 0.8em;
+        color: #666;
+      }
+      .google_meet_button{
+    display: inline-flex; /* changed from 'flex' to 'inline-flex' */
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 5px;
+    width: 150px;
+    background-color: #007bff;
+    color: #fff !important;
+    text-decoration: none; /* removed quotes */
+    border-radius: 10px;
+    margin: 0 auto;
+      }
+      .main-container{
+display: flex;
+justify-content: space-between;
+align-items: center;
+flex-wrap: wrap;
+gap: 10px
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <div class="main-container">
+        <div>
+
+          
+          <p class="email-content"><b>Hi</b> <%= host_name %>,</p>
+          <p class="email-content"><b>Event Type:</b> <%= event_type %></p>
+          <p class="email-content">A new event has been rescheduled.</p>
+          <p class="email-content"><b>Event Name:</b> <%= event_name %></p>
+      <p class="email-content"><b>Invitee:</b> <%= inviteeName %></p>
+      <p class="email-content"><b>Invitee Email:</b> <%= inviteeEmail %></p>
+      <p class="email-content">
+        <b>Event Date/Time:</b> <%= event_date_time %>
+      </p>
+
+<!-- design button for joining meeting and adding to the google calendar -->
+
+<p class="email-content">
+  <b>Cancel:</b>
+        <a href=<%= cancelUrl %> ><%= cancelUrl %></a>
+      </p>
+      <p class="email-content">
+        <b>Reschedule:</b>
+        <a href=<%= rescheduleUrl %> > <%= rescheduleUrl %> </a>
+      </p>
+
+
+      <p class="email-content">
+
+      <% if(isErrorCreatingOnlineEvent === false) { %>
+        <b>Location: </b>
+        <% if (location_type === 'online' && platform_name === 'google') { %>
+        This is a <%= platform_name %> web conference.
+        <a href="<%= google_meet_link %>"><%= google_meet_link %></a>
+        <% } else { %>
+      This is a <%= platform_name %> web conference.
+      <a href="<%= google_meet_link %>"><%= google_meet_link %></a>
+      <% } %>
+<% } %>
+    
+    </p>
+    <h5>Questions:</h5>
+    
+    <% questionsAndResponses.forEach(function(response) { %>
+  <p class="email-content">
+    <b><%= response.question_text %>:</b> 
+    <% if(response.questionType === 'checkboxes' && response.options) { %>
+      <% response.options.forEach(function(option) { %>
+        <p><%= option %></p> 
+        <% }); %>
+        <% } else { %>
+          <p><%= response.text %></p>  
+          <% } %>
+        </p>
+        <% }); %>
+      </div>
+    <div>
+<% if(isErrorCreatingOnlineEvent === false) { %>
+  <% if (location_type === 'online' && platform_name === 'google') { %>
+    <a class="google_meet_button" href="<%= google_meet_link %>">Join Google Meet</a>
+  <% } else { %>
+    <a class="google_meet_button" href="<%= google_meet_link %>">Join Zoom Meeting</a>
+  <% } %>
+<% } %>
+
+<% if(isErrorCreatingOnlineEvent && platform_name === 'zoom') { %>
+    <a class="google_meet_button" style="justify-content: center;" href="<%= addCalendarLink %>">Add to google </a>
+<% } %>
+    </div>
+  </div>
+
+
+      <p class="email-footer">
+        &copy; <%= new Date().getFullYear() %> Jadwali. All rights reserved.
+      </p>
+    </div>
+  </body>
+</html>
