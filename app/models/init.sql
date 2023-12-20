@@ -190,3 +190,16 @@ CREATE TABLE IF NOT EXISTS faqs(
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+CREATE TABLE IF NOT EXISTS subscription_payments (
+    transaction_id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    currency VARCHAR(50) NOT NULL,
+    transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    subscription_plan VARCHAR(255) NOT NULL,
+    next_billing_date DATE NOT NULL,
+    payment_token VARCHAR(255),
+    payment_status VARCHAR(50),
+    transaction_type VARCHAR(50),
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

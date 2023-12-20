@@ -26,6 +26,7 @@
     "jsonwebtoken": "^9.0.2",
     "moment": "^2.29.4",
     "moment-timezone": "^0.5.43",
+    "node-cron": "^3.0.3",
     "nodemailer": "^6.9.7",
     "passport-apple": "^2.0.2",
     "passport-facebook-token": "^4.0.0",
