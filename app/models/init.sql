@@ -192,6 +192,7 @@ CREATE TABLE IF NOT EXISTS faqs(
 );
 CREATE TABLE IF NOT EXISTS subscription_payments (
     transaction_id SERIAL PRIMARY KEY,
+    -- change user id to event slug relation because we would need to know that which transaction has been made for that specific event
     user_id INT NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
     currency VARCHAR(50) NOT NULL,
