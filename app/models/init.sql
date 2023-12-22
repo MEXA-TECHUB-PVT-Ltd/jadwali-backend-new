@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS attach_service_type(
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+
 CREATE TABLE IF NOT EXISTS events(
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -191,16 +192,25 @@ CREATE TABLE IF NOT EXISTS faqs(
     updated_at TIMESTAMP DEFAULT NOW()
 );
 CREATE TABLE IF NOT EXISTS subscription_payments (
-    transaction_id SERIAL PRIMARY KEY,
-    -- change user id to event slug relation because we would need to know that which transaction has been made for that specific event
-    user_id INT NOT NULL,
-    amount DECIMAL(10, 2) NOT NULL,
-    currency VARCHAR(50) NOT NULL,
-    transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    subscription_plan VARCHAR(255) NOT NULL,
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    tran_ref VARCHAR(255),
+    merchant_id INT,
+    profile_id INT,
+    cart_id UUID,
+    cart_description TEXT,
+    cart_currency CHAR(3),
+    cart_amount DECIMAL(10, 2),
+    tran_currency CHAR(3),
+    tran_total DECIMAL(10, 2),
+    tran_type VARCHAR(50),
+    tran_class VARCHAR(50),
+    token VARCHAR(255),
+    customer_details JSONB,
+    payment_result JSONB,
+    payment_info JSONB,
+    ipn_trace VARCHAR(255),
     next_billing_date DATE NOT NULL,
-    payment_token VARCHAR(255),
-    payment_status VARCHAR(50),
-    transaction_type VARCHAR(50),
+    subscription_status VARCHAR(255) DEFAULT 'inactive',
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

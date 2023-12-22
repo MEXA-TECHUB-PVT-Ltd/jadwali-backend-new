@@ -5,5 +5,6 @@ const controller = require("../../controllers/schedule/schedule");
 router.post("/create", controller.create);
 router.put("/update", controller.update);
 router.get("/get/:id", controller.get);
+router.get("/getAllByUser/:user_id", controller.getAllUserSchedules);
 
 module.exports = router;
