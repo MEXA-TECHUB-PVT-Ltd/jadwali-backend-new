@@ -735,3 +735,123 @@ exports.get = async (req, res) => {
     res.status(500).json({ status: false, message: err.message });
   }
 };
+
+exports.getAllUserSchedules = async (req, res) => {
+  const user_id = parseInt(req.params.user_id, 10);
+  const limit = parseInt(req.query.limit, 10) || 10; // Default to 10 records per page
+  const page = parseInt(req.query.page, 10) || 1; // Default to page 1
+  const offset = (page - 1) * limit;
+
+  try {
+    const scheduleQuery = `
+SELECT 
+    s.*,
+    json_build_object(
+        'name', e.name, 
+        'event_price', e.event_price, 
+        'deposit_price', e.deposit_price, 
+        'description', e.description,
+        'duration', e.duration,
+        'one_to_one', e.one_to_one,
+        'invite_in_type', e.invite_in_type,
+        'date_range', e.date_range,
+        'into_future', e.into_future,
+        'availableDays', e.availableDays,
+        'book_leading_time', e.book_leading_time,
+        'invite_in', e.invite_in,
+        'before_time', e.before_time,
+        'after_time', e.after_time,
+        'selected_avail_id', e.selected_avail_id,
+        'slug', e.slug
+    ) AS event,
+    json_build_object(
+        'name', u.full_name, 
+        'email', u.email
+    ) AS user,
+    (SELECT json_agg(
+        json_build_object(
+            'id', l.id, 
+            'address', l.address, 
+            'post_code', l.post_code, 
+            'location', l.location, 
+            'type', l.type, 
+            'platform_name', l.platform_name
+        )
+    ) FROM locations l WHERE l.event_id = s.event_id) AS locations,
+    (SELECT json_agg(
+        json_build_object(
+            'id', q.id, 
+            'text', q.text, 
+            'options', q.options, 
+            'type', q.type, 
+            'is_required', q.is_required, 
+            'status', q.status,
+            'others', q.others,
+            'responses', (
+                SELECT json_agg(
+                    json_build_object(
+                        'id', qr.id,
+                        'text', qr.text, 
+                        'options', qr.options
+                    )
+                ) FROM question_responses qr WHERE qr.question_id = q.id AND qr.schedule_id = s.id
+            )
+        )
+    ) FROM questions q WHERE q.event_id = s.event_id) AS questions
+      FROM 
+          schedule s
+      JOIN 
+          events e ON s.event_id = e.id
+      JOIN 
+          users u ON s.user_id = u.id
+      WHERE 
+          s.user_id = $1 AND (s.status = 'pending' OR s.status = 'scheduled'  OR s.status = 'rescheduled')
+      ORDER BY 
+          s.scheduling_time LIMIT $2 OFFSET $3
+
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*) 
+      FROM schedule 
+      WHERE user_id = $1 AND (status = 'pending' OR status = 'scheduled' OR status = 'rescheduled');
+    `;
+
+    const schedulesPromise = pool.query(scheduleQuery, [
+      user_id,
+      limit,
+      offset,
+    ]);
+    const countPromise = pool.query(countQuery, [user_id]);
+    const [schedulesResult, countResult] = await Promise.all([
+      schedulesPromise,
+      countPromise,
+    ]);
+
+    if (schedulesResult.rows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No schedules found for this user",
+      });
+    }
+
+    // Calculate total pages
+    const totalRecords = parseInt(countResult.rows[0].count, 10);
+    const totalPages = Math.ceil(totalRecords / limit);
+
+    res.json({
+      status: true,
+      message: "Schedules retrieved successfully",
+      pagination: {
+        limit,
+        page,
+        totalRecords,
+        totalPages,
+      },
+      schedules: schedulesResult.rows,
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};

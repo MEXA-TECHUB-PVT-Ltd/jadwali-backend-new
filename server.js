@@ -61,9 +61,8 @@ function getSubscriptionDetails(plan) {
 // app.get("/api/payment/callback", (req, res) => {
 //   return res.send("hello world");
 // });
-app.post("/return", (req, res) => {
-  console.log("Return POST Data:", req.body); // Log the body to see transaction details
-  // Process the transaction details here
+app.get("/return", (req, res) => {
+  console.log("Return POST Data:", req.body); 
   return res.send("Payment process completed");
 });
 
@@ -86,6 +85,7 @@ async function initialPaymentForToken(
         cart_currency: currency,
         cart_amount: amount,
         cart_description: description,
+        tokenize: 2,
         callback: `http://localhost:3025/api/payment/callback`,
         // return: "https://yourdomain.com/return",
       },
@@ -105,24 +105,15 @@ async function initialPaymentForToken(
   }
 }
 
+// Testing Card
+// 5200000000000007
+
 // Express route to handle subscription requests
 app.post("/subscribe", async (req, res) => {
-  const { plan, user_id = 2 } = req.body;
+  const { plan, user_id = 18 } = req.body;
   try {
     const subscriptionDetails = getSubscriptionDetails(plan);
-    console.log(subscriptionDetails);
-    const checkQuery = `SELECT * FROM subscription_payments WHERE user_id = $1 AND subscription_plan = $2`;
-    const existingSubscription = await pool.query(checkQuery, [
-      user_id,
-      subscriptionDetails.plan,
-    ]);
-    if (existingSubscription.rowCount > 0) {
-      return res
-        .status(401)
-        .json({ status: false, message: "User already has subscription" });
-    }
 
-    // Insert new subscription record as you currently do
     const response = await axios.post(
       "https://secure-global.paytabs.com/payment/request",
       {
@@ -133,10 +124,10 @@ app.post("/subscribe", async (req, res) => {
         cart_description: subscriptionDetails?.description,
         cart_currency: "PKR",
         cart_amount: subscriptionDetails?.amount,
-        callback: `${process.env.LIVE_SERVER}/api/payment/callback`,
+        tokenise: 2,
+        callback: `https://bd61-154-192-136-20.ngrok-free.app/api/payment/callback?user_id=${user_id}`,
         return: "",
         hide_shipping: true,
-        tokenise: 2,
         show_save_card: true,
       },
       {
@@ -146,30 +137,6 @@ app.post("/subscribe", async (req, res) => {
         },
       }
     );
-
-    // Check if the transaction is successful before saving
-    if (response?.data?.redirect_url) {
-      // Prepare the query
-      const insertQuery = `
-      INSERT INTO subscription_payments (user_id, amount, currency, subscription_plan, next_billing_date, payment_status, transaction_type)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *;`;
-
-      const nextBillingDate = calculateNextBillingDate(new Date(), plan);
-      const dbResponse = await pool.query(insertQuery, [
-        user_id,
-        subscriptionDetails.amount,
-        "PKR",
-        plan,
-        nextBillingDate,
-        "Pending",
-        "initial",
-      ]);
-
-      console.log("Transaction saved:", dbResponse.rows[0]);
-    }
-
-    console.log(response);
 
     res.redirect(response?.data?.redirect_url);
   } catch (error) {
@@ -305,6 +272,4 @@ cron.schedule("0 0 * * *", async () => {
     }
   }
 });
-
-
 app.listen(PORT, () => console.log(`Application listening on ${PORT}`));
