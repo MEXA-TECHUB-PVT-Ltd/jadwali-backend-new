@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS events(
     name TEXT,
     event_price INT,
     deposit_price INT,
-    description VARCHAR(255),
+    description TEXT,
     duration INT,
     one_to_one BOOLEAN NOT NULL DEFAULT FALSE,
     invite_in_type TEXT,

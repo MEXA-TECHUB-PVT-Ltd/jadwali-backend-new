@@ -36,8 +36,9 @@ exports.create = async (req, res) => {
     }
     if (
       (signup_type === "google" ||
-      signup_type === "apple" ||
-      signup_type === "facebook") && !email
+        signup_type === "apple" ||
+        signup_type === "facebook") &&
+      !email
     ) {
       return res.status(400).json({
         status: false,
@@ -139,17 +140,17 @@ exports.create = async (req, res) => {
     const response = {
       status: true,
       message: "User created successfully",
-      result: newUser.rows[0]
+      result: newUser.rows[0],
     };
 
     // if (signup_type === "email") {
-      const token = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-        expiresIn: 86400, // 24 hours
-      });
+    const token = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+      expiresIn: 86400, // 24 hours
+    });
 
-      // response.result.user.full_name = full_name;
-      // response.result.user.email = email;
-      response.result.token = token;
+    // response.result.user.full_name = full_name;
+    // response.result.user.email = email;
+    response.result.token = token;
     // }
 
     return res.status(201).json(response);
@@ -235,12 +236,10 @@ exports.signIn = async (req, res) => {
       // Fallback to email authentication if token is not valid or not provided
       if (!checkUserExists || checkUserExists.rowCount === 0) {
         if (!email) {
-          return res
-            .status(400)
-            .json({
-              status: false,
-              message: "Email is required for fallback authentication",
-            });
+          return res.status(400).json({
+            status: false,
+            message: "Email is required for fallback authentication",
+          });
         }
         checkUserExists = await pool.query(
           "SELECT * FROM users WHERE email = $1",
@@ -439,8 +438,8 @@ exports.get = async (req, res) => {
   }
 };
 exports.getAll = async (req, res) => {
-  const page = parseInt(req.query.page, 10);
-  const limit = parseInt(req.query.limit, 10);
+  const page = parseInt(req.query.page || 1, 10);
+  const limit = parseInt(req.query.limit || 10, 10);
 
   try {
     // Count total users
@@ -448,22 +447,29 @@ exports.getAll = async (req, res) => {
       "SELECT COUNT(*) FROM users WHERE role = 'user' AND deleted_at IS NULL";
     const countResult = await pool.query(countQuery);
     const totalUsers = parseInt(countResult.rows[0].count, 10);
-
-    // If page and limit are provided, use pagination, otherwise fetch all users
-    let usersQuery;
-    let usersResult;
-    if (!isNaN(page) && !isNaN(limit)) {
-      const offset = (page - 1) * limit;
-      usersQuery = `
-        SELECT * FROM users WHERE role = 'user' AND deleted_at IS NULL
-        OFFSET $1 LIMIT $2
-      `;
-      usersResult = await pool.query(usersQuery, [offset, limit]);
-    } else {
-      usersQuery =
-        "SELECT * FROM users WHERE role = 'user' AND deleted_at IS NULL";
-      usersResult = await pool.query(usersQuery);
-    }
+    const offset = !isNaN(page) && !isNaN(limit) ? (page - 1) * limit : 0;
+    const usersQuery = `
+      SELECT 
+        u.*, 
+        json_agg(ap.*) FILTER (WHERE ap.id IS NOT NULL) AS availability_profiles,
+        json_agg(ev.*) FILTER (WHERE ev.id IS NOT NULL) AS events
+      FROM 
+        users u
+      LEFT JOIN 
+        availability_profiles ap ON u.id = ap.user_id
+      LEFT JOIN 
+        events ev ON u.id = ev.user_id
+      WHERE 
+        u.role = 'user' AND u.deleted_at IS NULL
+      GROUP BY 
+        u.id
+      ORDER BY 
+        u.id DESC
+      OFFSET 
+        $1 LIMIT $2
+    `;
+    
+    const usersResult = await pool.query(usersQuery, [offset, limit]);
 
     if (usersResult.rowCount === 0) {
       return res.status(404).json({
@@ -495,7 +501,6 @@ exports.getAll = async (req, res) => {
     });
   }
 };
-
 
 exports.delete = async (req, res) => {
   const userId = parseInt(req.params.id, 10);
