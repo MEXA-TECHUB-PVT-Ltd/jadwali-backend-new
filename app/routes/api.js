@@ -17,6 +17,7 @@ const cancel = require("./cancel/cancel");
 const faqs = require("./faqs/faqs");
 const feedbacks = require("./feedbacks/feedbacks");
 const payment = require("./payment/payment");
+const upload = require("./universal/upload");
 
 
 router.use("/users", users);
@@ -34,6 +35,7 @@ router.use("/cancel", cancel);
 router.use("/faqs", faqs);
 router.use("/feedbacks", feedbacks);
 router.use("/payment", payment);
+router.use("/universal", upload);
 
 
 module.exports = router;

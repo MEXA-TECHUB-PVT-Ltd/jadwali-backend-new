@@ -1,3 +1,12 @@
+CREATE TABLE IF NOT EXISTS uploads (
+  id SERIAL PRIMARY KEY,
+  file_name VARCHAR(255),
+  file_type VARCHAR(255),
+  mime_type VARCHAR(255),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS users(
     id SERIAL PRIMARY KEY,
     full_name TEXT,
@@ -6,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users(
     verification_code TEXT,
     signup_type TEXT,
     role TEXT DEFAULT 'user',
+    profile_picture INT REFERENCES uploads(id) ON DELETE CASCADE,
     referral_link TEXT UNIQUE,
     referral_id INT REFERENCES users(id),
     has_made_purchase BOOLEAN DEFAULT FALSE,
