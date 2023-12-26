@@ -7,7 +7,7 @@ router.post("/create", controller.create);
 router.post("/signIn", controller.signIn);
 router.post("/forgotPassword", controller.forgotPassword);
 router.post("/verify_otp", controller.verify_otp);
-router.post("/resetPassword", controller.resetPassword);
+router.put("/resetPassword", controller.resetPassword);
 router.post("/updateBlockStatus", controller.updateBlockStatus);
 router.put("/updateBlockStatus", controller.updateBlockStatus);
 router.get("/get/:id", controller.get);

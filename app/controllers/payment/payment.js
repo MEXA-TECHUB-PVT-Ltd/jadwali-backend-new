@@ -27,42 +27,6 @@ cron.schedule("0 0 * * *", async () => {
     }
   }
 });
-
-async function processPayment(subscription) {
-  try {
-    const paymentResponse = await axios.post(
-      "https://secure-global.paytabs.com/payment/request",
-      {
-        profile_id: process.env.PAYTAB_PROFILE_ID,
-        tran_ref: "TST2335601827800",
-        cart_amount: 100,
-        tran_type: "sale",
-        tran_class: "recurring",
-        cart_id: subscription.cart_id,
-        cart_description: "Testing subscription",
-        cart_currency: "PKR",
-        token: subscription.token,
-      },
-      {
-        headers: {
-          Authorization: process.env.PAYTAB_SERVER_KEY,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (paymentResponse.data.success) {
-      return { success: true, newTranRef: paymentResponse.data.newTranRef };
-    } else {
-      console.error("Payment failed:", paymentResponse);
-      return { success: false };
-    }
-  } catch (error) {
-    console.error("Error processing payment:", error);
-    return { success: false };
-  }
-}
-
 async function updateSubscriptionAfterPayment(subscription, paymentResult) {
   const nextBillingDate = new Date();
   nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
@@ -78,6 +42,55 @@ async function updateSubscriptionAfterPayment(subscription, paymentResult) {
     subscription.id,
   ]);
 }
+
+async function processPayment(subscription) {
+  console.log("Subscription: ", {
+    profile_id: process.env.PAYTAB_PROFILE_ID,
+    tran_type: "sale",
+    tran_class: "recurring",
+    cart_id: subscription.cart_id,
+    cart_currency: "PKR",
+    cart_amount: 100,
+    cart_description: "Testing subscription",
+    token: subscription.token,
+    tran_ref: subscription.tran_ref,
+  });
+  try {
+    const paymentResponse = await axios.post(
+      "https://secure-global.paytabs.com/payment/request",
+      {
+        profile_id: process.env.PAYTAB_PROFILE_ID,
+        tran_type: "sale",
+        tran_class: "recurring",
+        cart_id: subscription.cart_id,
+        cart_currency: "PKR",
+        cart_amount: 100,
+        cart_description: "Testing subscription",
+        token: subscription.token,
+        tran_ref: subscription.tran_ref,
+      },
+      {
+        headers: {
+          Authorization: process.env.PAYTAB_SERVER_KEY,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log("response: ", paymentResponse);
+
+    // if (paymentResponse.data.success) {
+    //   return { success: true, newTranRef: paymentResponse.data.newTranRef };
+    // } else {
+    //   console.error("Payment failed:", paymentResponse);
+    //   return { success: false };
+    // }
+  } catch (error) {
+    console.error("Error processing payment:", error);
+    return { success: false };
+  }
+}
+
 
 exports.paymentCallback = async (req, res) => {
   try {
@@ -129,7 +142,7 @@ exports.paymentCallback = async (req, res) => {
         JSON.stringify(body.payment_result),
         JSON.stringify(body.payment_info),
         body.ipn_trace,
-        nextBillingDate.toISOString(), // Format as ISO string for SQL
+        nextBillingDate.toISOString(), 
         "initial",
         body.token,
       ];
@@ -144,8 +157,8 @@ exports.paymentCallback = async (req, res) => {
     console.log("Simulated payment result:", simulatedPaymentResult);
 
     return res.status(200).json({ message: "Payment simulation initiated" });
-    return res.status(200).json({ message: "hello world!" });
   } catch (error) {
+    
     console.log("Payment Callback Error", error.message);
     return res
       .status(500)
