@@ -34,6 +34,10 @@ app.use(
 );
 
 app.use("/public", express.static(path.join(__dirname, "public")));
+app.use("/test-route",(req,res)=>{
+  res.send("hello world")
+}
+)
 
 app.use("/payment", (req, res) => {
   res.render(path.join(__dirname, "app", "views", "payment.ejs"));
