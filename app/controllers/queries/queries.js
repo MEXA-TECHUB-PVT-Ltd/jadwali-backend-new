@@ -1,9 +1,9 @@
 const { pool } = require("../../config/db.config");
 
 exports.add = async (req, res) => {
-  const { user_id, comment } = req.body;
+  const { name, email, message } = req.body;
 
-  if (!user_id || !comment) {
+  if ((!name, !email, !message)) {
     return res.status(400).json({
       status: false,
       message: "User ID and comment are required.",
@@ -11,33 +11,23 @@ exports.add = async (req, res) => {
   }
 
   try {
-    const userIdExists = await pool.query("SELECT 1 FROM users WHERE id = $1", [
-      user_id,
-    ]);
-
-    if (userIdExists.rowCount === 0) {
-      return res.status(400).json({
-        status: false,
-        message: "Invalid user_id provided.",
-      });
-    }
     const query = `
-      INSERT INTO feedbacks (user_id, comment)
-      VALUES ($1, $2)
-      RETURNING id, user_id, comment, created_at, updated_at;
+      INSERT INTO queries (name, email, message)
+      VALUES ($1, $2, $3)
+      RETURNING *;
     `;
-    const result = await pool.query(query, [user_id, comment]);
+    const result = await pool.query(query, [name, email, message]);
 
     if (result.rowCount < 1) {
       return res.status(500).json({
         status: false,
-        message: "Error while inserting feedbacks.",
+        message: "Error while inserting queries.",
       });
     }
 
     return res.status(201).json({
       status: true,
-      message: "Feedback added successfully.",
+      message: "Queries added successfully.",
       result: result.rows[0],
     });
   } catch (error) {
@@ -49,51 +39,50 @@ exports.add = async (req, res) => {
 };
 
 exports.update = async (req, res) => {
-  const { id, user_id, comment } = req.body;
+  const { id, status } = req.body;
 
-  if (!id || !comment || !user_id) {
+  if (!id || !status) {
     return res.status(400).json({
       status: false,
-      message: "id, user_id, and comment are required.",
+      message: "id, and status are required.",
+    });
+  }
+
+  if (
+    status !== "connected" &&
+    status !== "dismissed" &&
+    status !== "pending"
+  ) {
+    return res.status(400).json({
+      status: false,
+      message: "status must be 'connected' or 'dismissed' or 'pending'",
     });
   }
 
   try {
-    // Check if the user exists
-    const userExists = await pool.query("SELECT 1 FROM users WHERE id = $1", [
-      user_id,
-    ]);
-    if (userExists.rowCount < 1) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found.",
-      });
-    }
-
-    // Check if the feedbacks with the specified id exists and belongs to the user
     const feedbackExists = await pool.query(
-      "SELECT id FROM feedbacks WHERE id = $1 AND user_id = $2",
-      [id, user_id]
+      "SELECT id FROM queries WHERE id = $1",
+      [id]
     );
     if (feedbackExists.rowCount < 1) {
       return res.status(404).json({
         status: false,
-        message: "Feedback not found or not owned by the user.",
+        message: "Queries not found.",
       });
     }
 
     const query = `
-      UPDATE feedbacks
-      SET comment = $3, updated_at = NOW()
-      WHERE id = $1 AND user_id = $2
-      RETURNING id, user_id, comment, created_at, updated_at;
+      UPDATE queries
+      SET status = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING *;
     `;
 
-    const result = await pool.query(query, [id, user_id, comment]);
+    const result = await pool.query(query, [status, id]);
 
     return res.status(200).json({
       status: true,
-      message: "Feedback updated successfully.",
+      message: "Queries updated successfully.",
       result: result.rows[0],
     });
   } catch (error) {
@@ -121,37 +110,28 @@ exports.getAll = async (req, res) => {
     const offset = (page - 1) * limit;
 
     const query = `
-      SELECT 
-        feedbacks.*,
-        json_build_object(
-            'full_name', users.full_name,
-            'email', users.email
-        ) as users
-      FROM feedbacks
-      INNER JOIN users ON feedbacks.user_id = users.id
-      ORDER BY 
-    feedbacks.id DESC
-LIMIT 
-    $1 OFFSET $2;
+      SELECT * FROM queries
+      ORDER BY created_at DESC
+      LIMIT $1 OFFSET $2;
     `;
     const result = await pool.query(query, [limit, offset]);
 
-    // Calculate total number of feedbacks
+    // Calculate total number of queries
     const totalFeedbackCount = parseInt(
-      (await pool.query("SELECT COUNT(*) FROM feedbacks")).rows[0].count
+      (await pool.query("SELECT COUNT(*) FROM queries")).rows[0].count
     );
     const totalPages = Math.ceil(totalFeedbackCount / limit);
 
     if (result.rowCount < 1) {
       return res.status(404).json({
         status: false,
-        message: "No feedbacks found.",
+        message: "No queries found.",
       });
     }
 
     return res.status(200).json({
       status: true,
-      message: "Feedback retrieved successfully.",
+      message: "Queries retrieved successfully.",
       currentPage: page,
       totalPages: totalPages,
       totalCount: totalFeedbackCount,
@@ -178,22 +158,19 @@ exports.get = async (req, res) => {
   }
 
   try {
-    const query = `SELECT feedbacks.*, json_build_object(
-                'full_name', users.full_name,
-            'email', users.email
-    ) as users FROM feedbacks INNER JOIN users ON feedbacks.user_id = users.id WHERE feedbacks.id = $1 `;
+    const query = `SELECT * FROM queries WHERE id = $1 ORDER BY created_at DESC;`;
     const result = await pool.query(query, [id]);
 
     if (result.rowCount < 1) {
       return res.status(404).json({
         status: false,
-        message: "No feedbacks found for the provided user.",
+        message: "No queries found for the provided user.",
       });
     }
 
     return res.status(200).json({
       status: true,
-      message: "Feedback retrieved successfully.",
+      message: "Queries retrieved successfully.",
       result: result.rows,
     });
   } catch (error) {
@@ -215,19 +192,19 @@ exports.delete = async (req, res) => {
   }
 
   try {
-    const query = `DELETE FROM feedbacks WHERE  id = $1 RETURNING *`;
+    const query = `DELETE FROM queries WHERE  id = $1 RETURNING *`;
     const result = await pool.query(query, [id]);
 
     if (result.rowCount < 1) {
       return res.status(404).json({
         status: false,
-        message: "No feedbacks found.",
+        message: "No queries found.",
       });
     }
 
     return res.status(200).json({
       status: true,
-      message: "Feedback deleted successfully.",
+      message: "Queries deleted successfully.",
       result: result.rows[0],
     });
   } catch (error) {
@@ -240,19 +217,19 @@ exports.delete = async (req, res) => {
 
 exports.deleteAll = async (req, res) => {
   try {
-    const query = `DELETE FROM feedbacks;`;
+    const query = `DELETE FROM queries;`;
     const result = await pool.query(query);
 
     if (result.rowCount === 0) {
       return res.status(404).json({
         status: false,
-        message: "There are no feedbacks available to delete.",
+        message: "There are no queries available to delete.",
       });
     }
 
     return res.status(200).json({
       status: true,
-      message: "All feedbacks entries deleted successfully.",
+      message: "All queries entries deleted successfully.",
     });
   } catch (error) {
     return res.status(500).json({
@@ -274,20 +251,20 @@ exports.search = async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT * FROM feedbacks WHERE comment ILIKE $1",
+      "SELECT * FROM queries WHERE comment ILIKE $1",
       [`%${query}%`]
     );
 
     if (result.rowCount < 1) {
       return res.json({
         status: false,
-        message: "No feedbacks found for the given search",
+        message: "No queries found for the given search",
       });
     }
 
     res.json({
       status: true,
-      message: "Feedback retrieved successfully",
+      message: "Quires retrieved successfully",
       result: result.rows,
     });
   } catch (error) {

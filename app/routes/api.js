@@ -18,6 +18,8 @@ const faqs = require("./faqs/faqs");
 const feedbacks = require("./feedbacks/feedbacks");
 const payment = require("./payment/payment");
 const upload = require("./universal/upload");
+const queries = require("./queries/queries");
+const count = require("./universal/count");
 
 
 router.use("/users", users);
@@ -36,6 +38,8 @@ router.use("/faqs", faqs);
 router.use("/feedbacks", feedbacks);
 router.use("/payment", payment);
 router.use("/universal", upload);
+router.use("/universal", count);
+router.use("/queries", queries);
 
 
 module.exports = router;

@@ -1,12 +1,11 @@
 CREATE TABLE IF NOT EXISTS uploads (
-  id SERIAL PRIMARY KEY,
-  file_name VARCHAR(255),
-  file_type VARCHAR(255),
-  mime_type VARCHAR(255),
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+    id SERIAL PRIMARY KEY,
+    file_name VARCHAR(255),
+    file_type VARCHAR(255),
+    mime_type VARCHAR(255),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
-
 CREATE TABLE IF NOT EXISTS users(
     id SERIAL PRIMARY KEY,
     full_name TEXT,
@@ -100,7 +99,6 @@ CREATE TABLE IF NOT EXISTS attach_service_type(
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
-
 CREATE TABLE IF NOT EXISTS events(
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -223,4 +221,14 @@ CREATE TABLE IF NOT EXISTS subscription_payments (
     next_billing_date DATE NOT NULL,
     subscription_status VARCHAR(255) DEFAULT 'inactive',
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS queries(
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    status VARCHAR(255) NOT NULL DEFAULT 'pending',
+    -- pending, connected, dismissed,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );

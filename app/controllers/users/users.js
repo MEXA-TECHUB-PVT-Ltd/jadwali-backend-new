@@ -410,7 +410,25 @@ exports.get = async (req, res) => {
   }
 
   try {
-    const userQuery = "SELECT * FROM users WHERE id = $1";
+    const userQuery = `SELECT 
+    users.*,
+    json_build_object(
+        'filename', uploads.file_name,
+        'filetype', uploads.file_type,
+        'mimetype', uploads.mime_type,
+        'created_at', uploads.created_at,
+        'updated_at', uploads.updated_at
+    ) AS upload_details
+FROM 
+    users
+LEFT JOIN 
+    uploads 
+ON 
+    users.profile_picture = uploads.id
+WHERE 
+    users.id = $1;
+
+`;
     const userResult = await pool.query(userQuery, [id]);
 
     if (userResult.rowCount === 0) {
@@ -451,37 +469,56 @@ exports.getAll = async (req, res) => {
     // If page and limit are provided, use pagination
     let usersQuery;
     let usersResult;
-    if (!isNaN(page) && !isNaN(limit)) {
-      const offset = (page - 1) * limit;
-      usersQuery = `
+if (!isNaN(page) && !isNaN(limit)) {
+  const offset = (page - 1) * limit;
+  usersQuery = `
         SELECT 
-          u.*,
-          (SELECT COUNT(*) FROM events WHERE user_id = u.id) as event_count
+            u.*,
+            (SELECT COUNT(*) FROM events WHERE user_id = u.id) as event_count,
+            json_build_object(
+                'filename', up.file_name,
+                'filetype', up.file_type,
+                'mimetype', up.mime_type,
+                'created_at', up.created_at,
+                'updated_at', up.updated_at
+            ) AS upload_details
         FROM 
-          users u
+            users u
+        LEFT JOIN 
+            uploads up ON u.profile_picture = up.id
         WHERE 
-          u.role = 'user' AND u.deleted_at IS NULL
+            u.role = 'user' AND u.deleted_at IS NULL
         ORDER BY 
-          u.id DESC
+            u.id DESC
         OFFSET 
-          $1 LIMIT $2
-      `;
-      usersResult = await pool.query(usersQuery, [offset, limit]);
-    } else {
-      // Fetch all users
-      usersQuery = `
+            $1 LIMIT $2
+    `;
+  usersResult = await pool.query(usersQuery, [offset, limit]);
+} else {
+  // Fetch all users
+  usersQuery = `
         SELECT 
-          u.*,
-          (SELECT COUNT(*) FROM events WHERE user_id = u.id) as event_count
+            u.*,
+            (SELECT COUNT(*) FROM events WHERE user_id = u.id) as event_count,
+            json_build_object(
+                'filename', up.file_name,
+                'filetype', up.file_type,
+                'mimetype', up.mime_type,
+                'created_at', up.created_at,
+                'updated_at', up.updated_at
+            ) AS upload_details
         FROM 
-          users u
+            users u
+        LEFT JOIN 
+            uploads up ON u.profile_picture = up.id
         WHERE 
-          u.role = 'user' AND u.deleted_at IS NULL
+            u.role = 'user' AND u.deleted_at IS NULL
         ORDER BY 
-          u.id DESC
-      `;
-      usersResult = await pool.query(usersQuery);
-    }
+            u.id DESC
+    `;
+  usersResult = await pool.query(usersQuery);
+}
+
 
     if (usersResult.rowCount === 0) {
       return res.status(404).json({
@@ -735,34 +772,38 @@ exports.getRecentlyDeletedUsers = async (req, res) => {
   }
 };
 
-exports.getByMonthCount = async (req, res) => {
+exports.getByMonthAndYearCount = async (req, res) => {
   try {
     const query = `
-            SELECT
-                EXTRACT(MONTH FROM created_at) AS month,
-                COUNT(*) AS count
-            FROM
-                users
-            GROUP BY
-                month
-            ORDER BY
-                month;
+      SELECT
+        EXTRACT(YEAR FROM created_at) AS year,
+        EXTRACT(MONTH FROM created_at) AS month,
+        COUNT(*) AS count
+      FROM
+        users
+      GROUP BY
+        year, month
+      ORDER BY
+        year, month;
     `;
 
     const result = await pool.query(query);
 
-    const monthCounts = result.rows.reduce((acc, row) => {
+    const monthYearCounts = result.rows.map((row) => {
       const monthName = new Date(0, row.month - 1).toLocaleString("en-US", {
         month: "long",
       });
-      acc[monthName] = row.count;
-      return acc;
-    }, {});
+      return {
+        year: row.year,
+        month: monthName,
+        count: row.count,
+      };
+    });
 
     res.json({
       status: true,
-      message: "User counts by month",
-      counts: monthCounts,
+      message: "User counts by month and year",
+      counts: monthYearCounts,
     });
   } catch (err) {
     res.status(500).json({
@@ -771,6 +812,7 @@ exports.getByMonthCount = async (req, res) => {
     });
   }
 };
+
 
 exports.updateBlockStatus = async (req, res) => {
   const { block_status, user_id } = req.body;
