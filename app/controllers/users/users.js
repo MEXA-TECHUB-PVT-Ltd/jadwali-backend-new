@@ -438,8 +438,8 @@ exports.get = async (req, res) => {
   }
 };
 exports.getAll = async (req, res) => {
-  const page = parseInt(req.query.page || 1, 10);
-  const limit = parseInt(req.query.limit || 10, 10);
+  const page = parseInt(req.query.page, 10);
+  const limit = parseInt(req.query.limit, 10);
 
   try {
     // Count total users
@@ -447,29 +447,41 @@ exports.getAll = async (req, res) => {
       "SELECT COUNT(*) FROM users WHERE role = 'user' AND deleted_at IS NULL";
     const countResult = await pool.query(countQuery);
     const totalUsers = parseInt(countResult.rows[0].count, 10);
-    const offset = !isNaN(page) && !isNaN(limit) ? (page - 1) * limit : 0;
-    const usersQuery = `
-      SELECT 
-        u.*, 
-        json_agg(ap.*) FILTER (WHERE ap.id IS NOT NULL) AS availability_profiles,
-        json_agg(ev.*) FILTER (WHERE ev.id IS NOT NULL) AS events
-      FROM 
-        users u
-      LEFT JOIN 
-        availability_profiles ap ON u.id = ap.user_id
-      LEFT JOIN 
-        events ev ON u.id = ev.user_id
-      WHERE 
-        u.role = 'user' AND u.deleted_at IS NULL
-      GROUP BY 
-        u.id
-      ORDER BY 
-        u.id DESC
-      OFFSET 
-        $1 LIMIT $2
-    `;
-    
-    const usersResult = await pool.query(usersQuery, [offset, limit]);
+
+    // If page and limit are provided, use pagination
+    let usersQuery;
+    let usersResult;
+    if (!isNaN(page) && !isNaN(limit)) {
+      const offset = (page - 1) * limit;
+      usersQuery = `
+        SELECT 
+          u.*,
+          (SELECT COUNT(*) FROM events WHERE user_id = u.id) as event_count
+        FROM 
+          users u
+        WHERE 
+          u.role = 'user' AND u.deleted_at IS NULL
+        ORDER BY 
+          u.id DESC
+        OFFSET 
+          $1 LIMIT $2
+      `;
+      usersResult = await pool.query(usersQuery, [offset, limit]);
+    } else {
+      // Fetch all users
+      usersQuery = `
+        SELECT 
+          u.*,
+          (SELECT COUNT(*) FROM events WHERE user_id = u.id) as event_count
+        FROM 
+          users u
+        WHERE 
+          u.role = 'user' AND u.deleted_at IS NULL
+        ORDER BY 
+          u.id DESC
+      `;
+      usersResult = await pool.query(usersQuery);
+    }
 
     if (usersResult.rowCount === 0) {
       return res.status(404).json({
@@ -491,7 +503,98 @@ exports.getAll = async (req, res) => {
       currentPage: page || 1,
       totalPages: totalPages,
       totalUsers: totalUsers,
-      users,
+      users: usersResult.rows,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.getAllDetails = async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+
+  if (isNaN(id)) {
+    return res.status(400).json({
+      status: false,
+      message: "Invalid user ID",
+    });
+  }
+
+  try {
+    const userDetailsQuery = `
+SELECT 
+  u.*, 
+  json_agg(
+    json_build_object(
+      'profile_id', ap.id,
+      'profile_name', ap.profile_name,
+      'unique_id', ap.unique_id,
+      'uuid', ap.uuid,
+      'availabilities', (
+        SELECT json_agg(
+          json_build_object(
+            'availability_id', a.id,
+            'day_of_week', a.day_of_week,
+            'is_available', a.is_available,
+            'time_slots', (
+              SELECT json_agg(ts.*)
+              FROM time_slots ts
+              WHERE ts.availability_id = a.id
+            )
+          )
+        )
+        FROM availability a
+        WHERE a.profile_id = ap.id
+      )
+    )
+  ) FILTER (WHERE ap.id IS NOT NULL) AS availability_profiles,
+  json_agg(
+    json_build_object(
+      'event', ev.*,
+      'location', (
+        SELECT json_agg(loc.*)
+        FROM locations loc
+        WHERE loc.event_id = ev.id
+      ),
+      'questions', (
+        SELECT json_agg(q.*)
+        FROM questions q
+        WHERE q.event_id = ev.id
+      )
+    )
+  ) FILTER (WHERE ev.id IS NOT NULL) AS events
+FROM 
+  users u
+LEFT JOIN 
+  availability_profiles ap ON u.id = ap.user_id
+LEFT JOIN 
+  events ev ON u.id = ev.user_id
+WHERE 
+  u.id = $1 AND u.deleted_at IS NULL
+GROUP BY 
+  u.id;
+
+    `;
+
+    const result = await pool.query(userDetailsQuery, [id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    const user = result.rows[0];
+
+    return res.status(200).json({
+      status: true,
+      message: "User details fetched successfully",
+      user,
     });
   } catch (error) {
     console.error(error);
@@ -706,3 +809,112 @@ exports.updateBlockStatus = async (req, res) => {
     });
   }
 };
+
+exports.updatePassword = async (req, res) => {
+  const { user_id, password, newPassword } = req.body;
+  try {
+    if (!user_id || !password || !newPassword) {
+      return res.status(401).json({
+        status: false,
+        message: "user_id, password and newPassword are required",
+      });
+    }
+    const findUserQuery = `SELECT * FROM users WHERE id = $1`;
+    const findUser = await pool.query(findUserQuery, [user_id]);
+    if (findUser.rowCount < 1) {
+      return res.status(401).json({
+        status: false,
+        message: "User does not exist",
+      });
+    }
+    if (findUser.rows[0].password != null) {
+      const isMatch = await bcrypt.compare(password, findUser.rows[0].password);
+      if (!isMatch) {
+        return res.status(401).json({
+          status: false,
+          message: "old password is incorrect",
+        });
+      }
+    }
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash(newPassword, salt);
+
+    const query = `UPDATE users SET password = $1 WHERE id = $2 RETURNING*`;
+    const result = await pool.query(query, [hash, user_id]);
+    if (result.rowCount < 1) {
+      return res.status(401).json({
+        status: false,
+        message: "something went wrong",
+      });
+    }
+    delete result.rows[0].password;
+    res.json({
+      status: true,
+      message: "password updated Successfully!",
+      result: result.rows[0],
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.updateProfile = async (req, res) => {
+  const { user_id } = req.body;
+  const updateFields = {};
+
+  // Check which fields are provided in the request body and add them to the updateFields object
+  if (req.body.full_name) {
+    updateFields.full_name = req.body.full_name;
+  }
+  if (req.body.uploads_picture_id) {
+    // You can validate if the provided uploads_picture_id exists here if needed
+    updateFields.profile_picture = req.body.uploads_picture_id;
+  }
+
+  try {
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({
+        status: false,
+        message: "No fields to update provided",
+      });
+    }
+
+    const query = `
+      UPDATE users 
+      SET 
+        full_name = COALESCE($1, full_name), 
+        profile_picture = COALESCE($2, profile_picture) 
+      WHERE 
+        id = $3 
+      RETURNING *`;
+
+    const result = await pool.query(query, [
+      updateFields.full_name,
+      updateFields.profile_picture,
+      user_id,
+    ]);
+
+    if (result.rowCount < 1) {
+      return res.status(401).json({
+        status: false,
+        message: "Couldn't update user profile",
+      });
+    }
+
+    delete result.rows[0].password;
+    res.json({
+      status: true,
+      message: "Profile updated Successfully!",
+      result: result.rows[0],
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: false,
+      message: error.message,
+    });
+  }
+};
+
