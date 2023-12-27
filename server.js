@@ -21,7 +21,7 @@ app.use(express.json());
 
 app.use(express.urlencoded({ extended: true }));
 
-const PORT = process.env.PORT || 3025;
+const PORT =3025;
 
 app.use(
   session({
