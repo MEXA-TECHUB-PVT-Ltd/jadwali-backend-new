@@ -32,7 +32,9 @@ jobs:
         run: |
           if [[ "${{ steps.pm2-check.outputs.server_running }}" == "true" ]]; then
             echo "Stopping server.js with PM2"
-            pm2 stop server
+            pm2 stop server.js
+            pm2 start -f server.js
+            pm2 save
           else
             echo "Starting server.js with PM2"
             pm2 start -f server.js
