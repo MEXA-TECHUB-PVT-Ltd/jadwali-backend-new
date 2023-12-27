@@ -1,5 +1,4 @@
-
-name: Node.js CI
+name: Node.js Server Management
 
 on:
   push:
@@ -8,46 +7,44 @@ on:
     branches: [main]
 
 jobs:
-  build:
-    runs-on: self-hosted
+  manage-server:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Use Node.js ${{ matrix.node-version }}
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      
+      - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: ${{ matrix.node-version }} # Specify your Node.js version here
+
+      - name: Install dependencies
+        run: npm install
+
       - name: Check if server.js is running
         id: pm2-check
         run: |
-          if pm2 show server; then
-            echo "Server is already running with PM2."
+          if pm2 list | grep -q 'server'; then
+            echo "Server is already running."
             echo "::set-output name=server_running::true"
           else
-            echo "Server is not running with PM2."
+            echo "Server is not running."
             echo "::set-output name=server_running::false"
           fi
-      - name: Install NPM packages
-        run: npm i
-      - name: Start or Stop server.js with PM2
+
+      - name: Manage server with PM2
         run: |
-          if [[ "${{ steps.pm2-check.outputs.server_running }}" == "true" ]]; then
-            echo "Stopping server.js with PM2"
+          if ${{ steps.pm2-check.outputs.server_running }}; then
+            echo "Stopping and deleting current server process."
             pm2 stop server
+            pm2 delete server
+            echo "Restarting server with PM2 in force mode."
+            pm2 start server.js --name server -f
           else
-            echo "Starting server.js with PM2"
-            pm2 start -f server.js
-            pm2 save
+            echo "Starting server with PM2."
+            pm2 start server.js --name server
           fi
-      - name: Restart Nginx (if needed)
-        run: |
-          if [[ "${{ steps.pm2-check.outputs.server_running }}" == "true" ]]; then
-            echo "Server is already running, no need to restart Nginx."
-          else
-            echo "Server was started or restarted, restarting Nginx..."
-            echo "mtechub123" | sudo -S sudo service nginx restart
-          fi
+          pm2 save
 
-
-
-
-
+      - name: Display PM2 status
+        run: pm2 status
