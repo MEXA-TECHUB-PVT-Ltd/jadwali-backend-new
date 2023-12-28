@@ -19,7 +19,7 @@ jobs:
       - name: Check if server.js is running
         id: pm2-check
         run: |
-          if pm2 show server; then
+          if pm2 show server.js; then
             echo "Server is already running with PM2."
             echo "::set-output name=server_running::true"
           else
