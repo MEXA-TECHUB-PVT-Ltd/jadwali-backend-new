@@ -1,0 +1,55 @@
+
+name: Node.js CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Check if server.js is running
+        id: pm2-check
+        run: |
+          if pm2 show jadwali-be; then
+            echo "Server is already running with PM2."
+            echo "::set-output name=server_running::true"
+          else
+            echo "Server is not running with PM2."
+            echo "::set-output name=server_running::false"
+          fi
+      - name: Install NPM packages
+        run: npm i
+      - name: Start or Stop server.js with PM2
+        run: |
+          if [[ "${{ steps.pm2-check.outputs.server_running }}" == "true" ]]; then
+            echo "Stopping server.js with PM2"
+            pm2 stop "jadwali-be"
+            pm2 start -f server.js --name "jadwali-be"
+            pm2 save
+          else
+            echo "Starting server.js with PM2"
+            pm2 start -f server.js --name "jadwali-be"
+            pm2 save
+          fi
+      - name: Restart Nginx (if needed)
+        run: |
+          if [[ "${{ steps.pm2-check.outputs.server_running }}" == "true" ]]; then
+            echo "Server is already running, no need to restart Nginx."
+          else
+            echo "Server was started or restarted, restarting Nginx..."
+            echo "mtechub123" | sudo -S sudo service nginx restart
+          fi
+
+
+
+
+

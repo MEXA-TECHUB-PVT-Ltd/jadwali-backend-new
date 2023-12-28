@@ -21,7 +21,8 @@ app.use(express.json());
 
 app.use(express.urlencoded({ extended: true }));
 
-const PORT = process.env.PORT || 3025;
+const PORT =3025;
+// test
 
 app.use(
   session({
@@ -33,6 +34,10 @@ app.use(
 );
 
 app.use("/public", express.static(path.join(__dirname, "public")));
+app.use("/test-route",(req,res)=>{
+  res.send("hello world test 123")
+}
+)
 
 app.use("/payment", (req, res) => {
   res.render(path.join(__dirname, "app", "views", "payment.ejs"));
