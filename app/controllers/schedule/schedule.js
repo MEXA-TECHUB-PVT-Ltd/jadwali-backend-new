@@ -766,7 +766,14 @@ SELECT
     ) AS event,
     json_build_object(
         'name', u.full_name, 
-        'email', u.email
+        'email', u.email,
+        'upload_details', json_build_object(
+            'filename', up.file_name,
+            'filetype', up.file_type,
+            'mimetype', up.mime_type,
+            'created_at', up.created_at,
+            'updated_at', up.updated_at
+        )
     ) AS user,
     (SELECT json_agg(
         json_build_object(
@@ -798,16 +805,19 @@ SELECT
             )
         )
     ) FROM questions q WHERE q.event_id = s.event_id) AS questions
-      FROM 
-          schedule s
-      JOIN 
-          events e ON s.event_id = e.id
-      JOIN 
-          users u ON s.user_id = u.id
-      WHERE 
-          s.user_id = $1 AND (s.status = 'pending' OR s.status = 'scheduled'  OR s.status = 'rescheduled')
-      ORDER BY 
-          s.scheduling_time LIMIT $2 OFFSET $3
+FROM 
+    schedule s
+JOIN 
+    events e ON s.event_id = e.id
+JOIN 
+    users u ON s.user_id = u.id
+LEFT JOIN 
+    uploads up ON u.profile_picture = up.id
+WHERE 
+    s.user_id = $1 AND (s.status = 'pending' OR s.status = 'scheduled' OR s.status = 'rescheduled')
+ORDER BY 
+    s.scheduling_time LIMIT $2 OFFSET $3;
+
 
     `;
 
