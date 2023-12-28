@@ -277,14 +277,16 @@ exports.signIn = async (req, res) => {
 };
 
 exports.forgotPassword = async (req, res) => {
-  const { email } = req.body;
+  const { email, role } = req.body;
   if (!email) {
     return res.status(404).json({ message: "Email is required!" });
   }
+  const defaultRole = role ? role : "user";
+
   try {
     const checkUserExists = await pool.query(
-      "SELECT * FROM users WHERE email = $1",
-      [email]
+      "SELECT * FROM users WHERE email = $1 AND role = $2",
+      [email, defaultRole]
     );
     if (checkUserExists.rowCount === 0) {
       return res.status(409).json({

@@ -82,11 +82,17 @@ exports.create = async (req, res) => {
     const username = getUser.rows[0].full_name || getUser.rows[0].email;
 
     let slug = slugify(name.toLowerCase(), "-");
+    let usernameSlug = slugify(username.toLowerCase(), "-");
 
     const eventNameQuery = "SELECT COUNT(*) FROM events WHERE name = $1";
     const eventNameCount = await pool.query(eventNameQuery, [name]);
     if (parseInt(eventNameCount.rows[0].count) > 0) {
       slug += `-${eventNameCount.rows[0].count}`;
+    }
+    const userNameQuery = "SELECT COUNT(*) FROM events WHERE user_slug = $1";
+    const userNameCount = await pool.query(userNameQuery, [usernameSlug]);
+    if (parseInt(userNameCount.rows[0].count) > 0) {
+      usernameSlug += `-${eventNameCount.rows[0].count}`;
     }
 
     const eventCount = await getUserEventCount(user_id);
@@ -97,7 +103,7 @@ exports.create = async (req, res) => {
       });
     }
     const insertQuery =
-      "INSERT INTO events (user_id, name, event_price, deposit_price, description, duration, one_to_one, slug) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *";
+      "INSERT INTO events (user_id, name, event_price, deposit_price, description, duration, one_to_one, slug, user_slug) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *";
     const values = [
       user_id,
       name,
@@ -107,14 +113,12 @@ exports.create = async (req, res) => {
       duration,
       one_to_one,
       slug,
+      usernameSlug,
     ];
     const result = await pool.query(insertQuery, values);
     const isFree = "free-schedule";
-    const webviewURL = `${
-      process.env.CLIENT_URL
-    }/${isFree}/${username.toLowerCase()}/${slug}`;
+    const webviewURL = `${process.env.CLIENT_URL}/${isFree}/${usernameSlug}/${slug}`;
 
-    // Return success response
     return res.status(201).json({
       status: true,
       message: "Event created successfully",

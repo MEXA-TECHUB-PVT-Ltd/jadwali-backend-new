@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS events(
     after_time INT,
     selected_avail_id INT REFERENCES availability_profiles(id) ON DELETE CASCADE,
     slug TEXT UNIQUE,
+    user_slug TEXT UNIQUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
