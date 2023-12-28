@@ -35,7 +35,7 @@ app.use(
 
 app.use("/public", express.static(path.join(__dirname, "public")));
 app.use("/test-route",(req,res)=>{
-  res.send("hello world")
+  res.send("hello world test 123")
 }
 )
 
