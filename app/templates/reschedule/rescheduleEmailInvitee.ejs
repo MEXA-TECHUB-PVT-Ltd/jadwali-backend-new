@@ -83,15 +83,14 @@ gap: 10px
 
       <p class="email-content">
 
-      <% if(isErrorCreatingOnlineEvent === false) { %>
-        <b>Location: </b>
-        <% if (location_type === 'online' && platform_name === 'google') { %>
-        This is a <%= platform_name %> web conference.
-        <a href="<%= google_meet_link %>"><%= google_meet_link %></a>
-        <% } else { %>
-      This is a <%= platform_name %> web conference.
-      <a href="<%= google_meet_link %>"><%= google_meet_link %></a>
-      <% } %>
+<% if(isErrorCreatingOnlineEvent === false) { %>
+  <b>Location: </b>
+  <% if (location_type === 'online') { %>
+    This is a <%= platform_name %> web conference.
+    <a href="<%= google_meet_link %>"><%= google_meet_link %></a>
+  <% } else { %>
+    This is a physical event at <%= address %>.
+  <% } %>
 <% } %>
     
     </p>
@@ -111,16 +110,16 @@ gap: 10px
         <% }); %>
       </div>
     <div>
-<% if(isErrorCreatingOnlineEvent === false) { %>
-  <% if (location_type === 'online' && platform_name === 'google') { %>
+<% if(isErrorCreatingOnlineEvent === false && location_type === 'online') { %>
+  <% if ( platform_name === 'google') { %>
     <a class="google_meet_button" href="<%= google_meet_link %>">Join Google Meet</a>
   <% } else { %>
     <a class="google_meet_button" href="<%= google_meet_link %>">Join Zoom Meeting</a>
   <% } %>
 <% } %>
 
-<% if(isErrorCreatingOnlineEvent && platform_name === 'zoom') { %>
-    <a class="google_meet_button" style="justify-content: center;" href="<%= addCalendarLink %>">Add to google </a>
+<% if(isErrorCreatingOnlineEvent && location_type === 'online' && platform_name === 'zoom') { %>
+    <a class="google_meet_button" style="justify-content: center;" href="<%= addCalendarLink %>">Add to google Calendar </a>
 <% } %>
     </div>
   </div>

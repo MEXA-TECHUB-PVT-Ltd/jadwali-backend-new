@@ -143,15 +143,11 @@ exports.create = async (req, res) => {
       result: newUser.rows[0],
     };
 
-    // if (signup_type === "email") {
     const token = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-      expiresIn: 86400, // 24 hours
+      expiresIn: 86400,
     });
 
-    // response.result.user.full_name = full_name;
-    // response.result.user.email = email;
     response.result.token = token;
-    // }
 
     return res.status(201).json(response);
   } catch (error) {
@@ -281,14 +277,16 @@ exports.signIn = async (req, res) => {
 };
 
 exports.forgotPassword = async (req, res) => {
-  const { email } = req.body;
+  const { email, role } = req.body;
   if (!email) {
     return res.status(404).json({ message: "Email is required!" });
   }
+  const defaultRole = role ? role : "user";
+
   try {
     const checkUserExists = await pool.query(
-      "SELECT * FROM users WHERE email = $1",
-      [email]
+      "SELECT * FROM users WHERE email = $1 AND role = $2",
+      [email, defaultRole]
     );
     if (checkUserExists.rowCount === 0) {
       return res.status(409).json({
@@ -469,9 +467,9 @@ exports.getAll = async (req, res) => {
     // If page and limit are provided, use pagination
     let usersQuery;
     let usersResult;
-if (!isNaN(page) && !isNaN(limit)) {
-  const offset = (page - 1) * limit;
-  usersQuery = `
+    if (!isNaN(page) && !isNaN(limit)) {
+      const offset = (page - 1) * limit;
+      usersQuery = `
         SELECT 
             u.*,
             (SELECT COUNT(*) FROM events WHERE user_id = u.id) as event_count,
@@ -493,10 +491,10 @@ if (!isNaN(page) && !isNaN(limit)) {
         OFFSET 
             $1 LIMIT $2
     `;
-  usersResult = await pool.query(usersQuery, [offset, limit]);
-} else {
-  // Fetch all users
-  usersQuery = `
+      usersResult = await pool.query(usersQuery, [offset, limit]);
+    } else {
+      // Fetch all users
+      usersQuery = `
         SELECT 
             u.*,
             (SELECT COUNT(*) FROM events WHERE user_id = u.id) as event_count,
@@ -516,9 +514,8 @@ if (!isNaN(page) && !isNaN(limit)) {
         ORDER BY 
             u.id DESC
     `;
-  usersResult = await pool.query(usersQuery);
-}
-
+      usersResult = await pool.query(usersQuery);
+    }
 
     if (usersResult.rowCount === 0) {
       return res.status(404).json({
@@ -564,7 +561,14 @@ exports.getAllDetails = async (req, res) => {
   try {
     const userDetailsQuery = `
 SELECT 
-  u.*, 
+  u.*,
+  json_build_object(
+    'filename', up.file_name,
+    'filetype', up.file_type,
+    'mimetype', up.mime_type,
+    'created_at', up.created_at,
+    'updated_at', up.updated_at
+  ) AS upload_details,
   json_agg(
     json_build_object(
       'profile_id', ap.id,
@@ -610,11 +614,12 @@ LEFT JOIN
   availability_profiles ap ON u.id = ap.user_id
 LEFT JOIN 
   events ev ON u.id = ev.user_id
+LEFT JOIN 
+  uploads up ON u.profile_picture = up.id
 WHERE 
   u.id = $1 AND u.deleted_at IS NULL
 GROUP BY 
-  u.id;
-
+  u.id, up.id, ap.id, ev.id;
     `;
 
     const result = await pool.query(userDetailsQuery, [id]);
@@ -813,7 +818,6 @@ exports.getByMonthAndYearCount = async (req, res) => {
   }
 };
 
-
 exports.updateBlockStatus = async (req, res) => {
   const { block_status, user_id } = req.body;
   try {
@@ -924,33 +928,59 @@ exports.updateProfile = async (req, res) => {
       });
     }
 
-    const query = `
+    const updateQuery = `
       UPDATE users 
       SET 
-        full_name = COALESCE($1, full_name), 
-        profile_picture = COALESCE($2, profile_picture) 
+        full_name = $1, 
+        profile_picture = $2 
       WHERE 
         id = $3 
-      RETURNING *`;
+      RETURNING id`;
 
-    const result = await pool.query(query, [
+    const updateResult = await pool.query(updateQuery, [
       updateFields.full_name,
       updateFields.profile_picture,
       user_id,
     ]);
 
-    if (result.rowCount < 1) {
+    if (updateResult.rowCount < 1) {
       return res.status(401).json({
         status: false,
         message: "Couldn't update user profile",
       });
     }
 
-    delete result.rows[0].password;
+    const userQuery = `
+      SELECT 
+        u.*,
+        json_build_object(
+          'filename', up.file_name,
+          'filetype', up.file_type,
+          'mimetype', up.mime_type,
+          'created_at', up.created_at,
+          'updated_at', up.updated_at
+        ) AS upload_details
+      FROM 
+        users u
+      LEFT JOIN 
+        uploads up ON u.profile_picture = up.id
+      WHERE 
+        u.id = $1`;
+
+    const userResult = await pool.query(userQuery, [user_id]);
+
+    if (userResult.rowCount < 1) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    delete userResult.rows[0].password;
     res.json({
       status: true,
       message: "Profile updated Successfully!",
-      result: result.rows[0],
+      result: userResult.rows[0],
     });
   } catch (error) {
     res.status(500).json({
@@ -959,4 +989,3 @@ exports.updateProfile = async (req, res) => {
     });
   }
 };
-

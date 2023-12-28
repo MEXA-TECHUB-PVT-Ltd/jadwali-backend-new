@@ -35,6 +35,7 @@ const {
   createGoogleCalendarEvent,
   createZoomEvent,
 } = require("../../util/schedulingHandler");
+const moment = require("moment");
 
 exports.create = async (req, res) => {
   const {
@@ -45,6 +46,7 @@ exports.create = async (req, res) => {
     responses,
     type,
     platform_name,
+    address,
   } = req.body;
 
   const validationError = validateRequestBody(req.body);
@@ -192,24 +194,26 @@ exports.create = async (req, res) => {
     const zoom_expiry_at = userCheck.rows[0].zoom_expiry_at;
     const currentTime = new Date();
 
-    try {
-      if (platform_name === "google") {
-        // Check if Google token has expired
-        if (new Date(google_expiry_at) <= currentTime) {
-          await refreshGoogleAccessToken(user_id);
-        } else {
-          console.log("Google token still valid, no need to refresh");
+    if (type === "online") {
+      try {
+        if (platform_name === "google") {
+          // Check if Google token has expired
+          if (new Date(google_expiry_at) <= currentTime) {
+            await refreshGoogleAccessToken(user_id);
+          } else {
+            console.log("Google token still valid, no need to refresh");
+          }
+        } else if (platform_name === "zoom") {
+          // Check if Zoom token has expired
+          if (new Date(zoom_expiry_at) <= currentTime) {
+            await refreshZoomAccessToken(user_id);
+          } else {
+            console.log("Zoom token still valid, no need to refresh");
+          }
         }
-      } else if (platform_name === "zoom") {
-        // Check if Zoom token has expired
-        if (new Date(zoom_expiry_at) <= currentTime) {
-          await refreshZoomAccessToken(user_id);
-        } else {
-          console.log("Zoom token still valid, no need to refresh");
-        }
+      } catch (tokenRefreshError) {
+        console.error("Token refresh failed:", tokenRefreshError);
       }
-    } catch (tokenRefreshError) {
-      console.error("Token refresh failed:", tokenRefreshError);
     }
 
     // after we inserted the new token we're fetching the user again
@@ -267,15 +271,22 @@ exports.create = async (req, res) => {
       ? google_meet_link
       : zoom_meeting_link;
 
-    const location = {
-      type,
-      platform_name,
-      google_meet_link: platform_meeting_link,
-    };
+    const location =
+      type === "online"
+        ? {
+            type,
+            platform_name,
+            google_meet_link: platform_meeting_link,
+          }
+        : { type, address };
 
     eventDetails["location"] = location;
 
     const addCalendarLink = createAddToCalendarLink(eventDetails);
+
+    const formattedDateTime = moment(scheduling_time).format("LLLL");
+
+    console.log(formattedDateTime);
 
     try {
       const { hostEmailRender, inviteeEmailRender } = await renderEmailData(
@@ -285,7 +296,7 @@ exports.create = async (req, res) => {
         undefined,
         undefined,
         responses,
-        scheduling_time,
+        formattedDateTime,
         location,
         cancelUrl,
         rescheduleUrl,
@@ -339,6 +350,7 @@ exports.update = async (req, res) => {
     responses,
     type,
     platform_name,
+    address,
   } = req.body;
 
   if (
@@ -348,12 +360,12 @@ exports.update = async (req, res) => {
     !selected_date ||
     !selected_time ||
     !responses ||
-    !platform_name
+    !type
   ) {
     return res.status(400).json({
       status: false,
       message:
-        "event_id, user_id, schedule_id, selected_date, selected_time, platform_name and responses are required",
+        "event_id, user_id, schedule_id, selected_date, selected_time, type and responses are required",
     });
   }
 
@@ -408,7 +420,6 @@ exports.update = async (req, res) => {
     );
 
     let responseDetails = [];
-    console.log(responses);
     if (responses?.length === 0) {
       for (const response of responses) {
         const { question_id, text, options } = response;
@@ -492,24 +503,26 @@ exports.update = async (req, res) => {
     const zoom_expiry_at = userCheck.rows[0].zoom_expiry_at;
     const currentTime = new Date();
 
-    try {
-      if (platform_name === "google") {
-        // Check if Google token has expired
-        if (new Date(google_expiry_at) <= currentTime) {
-          await refreshGoogleAccessToken(user_id);
-        } else {
-          console.log("Google token still valid, no need to refresh");
+    if (type === "online") {
+      try {
+        if (platform_name === "google") {
+          // Check if Google token has expired
+          if (new Date(google_expiry_at) <= currentTime) {
+            await refreshGoogleAccessToken(user_id);
+          } else {
+            console.log("Google token still valid, no need to refresh");
+          }
+        } else if (platform_name === "zoom") {
+          // Check if Zoom token has expired
+          if (new Date(zoom_expiry_at) <= currentTime) {
+            await refreshZoomAccessToken(user_id);
+          } else {
+            console.log("Zoom token still valid, no need to refresh");
+          }
         }
-      } else if (platform_name === "zoom") {
-        // Check if Zoom token has expired
-        if (new Date(zoom_expiry_at) <= currentTime) {
-          await refreshZoomAccessToken(user_id);
-        } else {
-          console.log("Zoom token still valid, no need to refresh");
-        }
+      } catch (tokenRefreshError) {
+        console.error("Token refresh failed:", tokenRefreshError);
       }
-    } catch (tokenRefreshError) {
-      console.error("Token refresh failed:", tokenRefreshError);
     }
 
     // after we inserted the new token we're fetching the user again
@@ -564,17 +577,22 @@ exports.update = async (req, res) => {
       ? google_meet_link
       : zoom_meeting_link;
 
-    const location = {
-      type,
-      platform_name,
-      google_meet_link: platform_meeting_link,
-    };
+    const location =
+      type === "online"
+        ? {
+            type,
+            platform_name,
+            google_meet_link: platform_meeting_link,
+          }
+        : { type, address };
 
     eventDetails["location"] = location;
 
     const linkForSyncOnlinePlatforms = `${process.env.SERVER_URL}/platform/connect-${platform_name}?user_id=${user_id}`;
 
     const addCalendarLink = createAddToCalendarLink(eventDetails);
+
+    const formattedDateTime = moment(scheduling_time).format("LLLL");
 
     try {
       const { hostEmailRender, inviteeEmailRender } = await renderEmailData(
@@ -584,7 +602,7 @@ exports.update = async (req, res) => {
         invitee_email,
         invitee_name,
         responses,
-        scheduling_time,
+        formattedDateTime,
         location,
         cancelUrl,
         rescheduleUrl,
@@ -766,7 +784,14 @@ SELECT
     ) AS event,
     json_build_object(
         'name', u.full_name, 
-        'email', u.email
+        'email', u.email,
+        'upload_details', json_build_object(
+            'filename', up.file_name,
+            'filetype', up.file_type,
+            'mimetype', up.mime_type,
+            'created_at', up.created_at,
+            'updated_at', up.updated_at
+        )
     ) AS user,
     (SELECT json_agg(
         json_build_object(
@@ -798,16 +823,19 @@ SELECT
             )
         )
     ) FROM questions q WHERE q.event_id = s.event_id) AS questions
-      FROM 
-          schedule s
-      JOIN 
-          events e ON s.event_id = e.id
-      JOIN 
-          users u ON s.user_id = u.id
-      WHERE 
-          s.user_id = $1 AND (s.status = 'pending' OR s.status = 'scheduled'  OR s.status = 'rescheduled')
-      ORDER BY 
-          s.scheduling_time LIMIT $2 OFFSET $3
+FROM 
+    schedule s
+JOIN 
+    events e ON s.event_id = e.id
+JOIN 
+    users u ON s.user_id = u.id
+LEFT JOIN 
+    uploads up ON u.profile_picture = up.id
+WHERE 
+    s.user_id = $1 AND (s.status = 'pending' OR s.status = 'scheduled' OR s.status = 'rescheduled')
+ORDER BY 
+    s.scheduling_time LIMIT $2 OFFSET $3;
+
 
     `;
 
