@@ -19,7 +19,7 @@ jobs:
       - name: Check if server.js is running
         id: pm2-check
         run: |
-          if pm2 show server.js; then
+          if pm2 show jadwali-be; then
             echo "Server is already running with PM2."
             echo "::set-output name=server_running::true"
           else
@@ -32,12 +32,12 @@ jobs:
         run: |
           if [[ "${{ steps.pm2-check.outputs.server_running }}" == "true" ]]; then
             echo "Stopping server.js with PM2"
-            pm2 stop server.js
-            pm2 start -f server.js
+            pm2 stop "jadwali-be"
+            pm2 start -f server.js --name "jadwali-be"
             pm2 save
           else
             echo "Starting server.js with PM2"
-            pm2 start -f server.js
+            pm2 start -f server.js --name "jadwali-be"
             pm2 save
           fi
       - name: Restart Nginx (if needed)
