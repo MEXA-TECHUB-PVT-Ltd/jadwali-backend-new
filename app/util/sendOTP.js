@@ -1,6 +1,8 @@
 const { pool } = require("../config/db.config");
 const crypto = require("crypto");
 const sendEmail = require("../lib/sendEmail");
+const ejs = require('ejs');
+const path = require('path');
 
 const sendOtp = async (email, res, user_id) => {
   const otp = crypto.randomInt(1000, 9999);
@@ -13,7 +15,14 @@ const sendOtp = async (email, res, user_id) => {
     const subject = "Verify Account";
     const htmlContent = "YOUR CODE IS " + otp;
 
-    return  sendEmail(email, subject, htmlContent);
+    const emailHtml = await ejs.renderFile(
+      path.join(__dirname, "..", "templates", "auth", "verification.ejs"),
+      {
+        verification_code: otp,
+      }
+    );
+    return otp;
+
   } catch (err) {
     console.log(err);
     return {

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style type="text/css">
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: Arial, sans-serif;
+      }
+      .container {
+        background-color: #fff;
+        padding: 40px;
+        margin: 20px auto;
+        max-width: 600px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        padding: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .content {
+        margin: 20px 0;
+        text-align: center;
+        background-color: #fff;
+        padding: 10px;
+      }
+      .verification {
+        padding: 10px 20px;
+        width: auto; /* Adjusts width automatically based on content */
+        border: 2px solid #1b1464; /* Solid or more pronounced border */
+        border-radius: 10px;
+        border-style: dashed;
+        display: inline-block;
+        font-family: "Courier New", monospace; /* Monospaced font for better readability */
+        font-size: 20px; /* Larger font size */
+        font-weight: bold; /* Bold font */
+        text-align: center; /* Center align text */
+      }
+
+      .footer {
+        padding: 10px;
+        text-align: center;
+        font-size: 12px;
+      }
+      .button {
+        display: inline-block;
+        padding: 10px 15px;
+        margin: 10px auto;
+        background-color: #007bff;
+        color: white;
+        text-decoration: none;
+        border-radius: 5px;
+      }
+      .mx-2 {
+        margin: 0 20px;
+      }
+      .color-black {
+        color: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <!-- Your logo goes here -->
+        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+          <tr>
+            <td style="text-align: center">
+              <img
+                src="https://res.cloudinary.com/dxfdrtxi3/image/upload/v1703757086/Jadwali/vse8fjhqldrsckymbwbr.png"
+                alt="Company Logo"
+                width="200"
+                style="display: block; margin: 0 auto; width: 200px"
+              />
+            </td>
+          </tr>
+        </table>
+        <p id="currentDate"></p>
+      </div>
+
+      <div class="content">
+        <h1 class="color-black">Email Verification</h1>
+        <p class="color-black">
+          Thank you for choosing Jadwali as your trusted platform. To ensure the
+          security of your account and to complete the registration process, we
+          need to verify your email address. Please find your unique
+          verification code below:
+        </p>
+        <!-- Verification Link -->
+        <div class="verification">
+          <strong class="color-black"> <%= verification_code %> </strong>
+        </div>
+        <p class="color-black">
+          Please enter this code on the verification page to activate your
+          account. If you didn't request this code, please ignore this email,
+          and your account will remain inactive.
+        </p>
+        <p class="color-black">We look forward to serving you.</p>
+      </div>
+
+      <div class="footer">
+        <img
+          src="https://res.cloudinary.com/dxfdrtxi3/image/upload/v1703757086/Jadwali/vse8fjhqldrsckymbwbr.png"
+          alt="Logo"
+          style="width: 80px"
+        />
+        <p style="margin: 10px 0">
+          &copy; 2023 I can bring it. All right reserved
+        </p>
+        <!-- Social Media Icons -->
+        <footer>
+          <div class="text-center">
+            <!-- Replace with your social media icons -->
+            <img
+              src="https://res.cloudinary.com/dxfdrtxi3/image/upload/v1698903650/instagram_icon_fe3vkq.png"
+              alt="Instagram"
+            />
+            <img
+              src="https://res.cloudinary.com/dxfdrtxi3/image/upload/v1698903493/facebook_icon_pbxcle.png"
+              alt="Facebook"
+            />
+            <img
+              src="https://res.cloudinary.com/dxfdrtxi3/image/upload/v1698903960/likedin_tj7kss.png"
+              alt="LinkedIn"
+            />
+            <img
+              src="https://res.cloudinary.com/dxfdrtxi3/image/upload/v1698903760/twitter_icon_fd6jya.png"
+              alt="Twitter"
+            />
+            <p>
+              If you have any questions, feel free message us at
+              Jadwali@gmail.com. All right reserved. Update email preferences or
+              unsubscribe.
+            </p>
+            <p>&copy; 2023 Jadwali. All right reserved</p>
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        document.getElementById("currentDate").innerText =
+          new Date().toLocaleDateString();
+      });
+    </script>
+  </body>
+</html>

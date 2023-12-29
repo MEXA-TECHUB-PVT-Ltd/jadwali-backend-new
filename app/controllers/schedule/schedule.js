@@ -36,6 +36,8 @@ const {
   createZoomEvent,
 } = require("../../util/schedulingHandler");
 const moment = require("moment");
+const { v4: uuidv4 } = require("uuid");
+const axios = require("axios");
 
 exports.create = async (req, res) => {
   const {
@@ -47,6 +49,8 @@ exports.create = async (req, res) => {
     type,
     platform_name,
     address,
+    total_price,
+    deposit_price,
   } = req.body;
 
   const validationError = validateRequestBody(req.body);
@@ -77,6 +81,76 @@ exports.create = async (req, res) => {
         .status(400)
         .json({ status: false, message: "User or event not found" });
     }
+
+    // ** handling paid events
+    if (total_price || deposit_price) {
+      // if registered user is buying event we'll take the deposit price
+      // if non registered user is buying event we take the total price
+      const checkIfInviteeIsUser = await pool.query(
+        `SELECT * FROM users WHERE email = $1`,
+        [invitee_email]
+      );
+
+      const eventPriceOnInviteeUser =
+        checkIfInviteeIsUser.rowCount > 0 ? deposit_price : total_price;
+      // console.log(eventPriceOnInviteeUser);
+      const event_name = eventCheck.rows[0].name;
+      const scheduleDetails = {
+        event_id,
+        user_id,
+        selected_date,
+        selected_time,
+        responses,
+        type,
+        platform_name,
+        address,
+        total_price,
+        deposit_price,
+      };
+      const callbackUrl = `https://4fde-154-192-136-20.ngrok-free.app/api/payment/callback`;
+
+      // paytabs payment
+      try {
+        const response = await axios.post(
+          "https://secure-global.paytabs.com/payment/request",
+          {
+            profile_id: process.env.PAYTAB_PROFILE_ID,
+            tran_type: "sale",
+            tran_class: "ecom",
+            cart_id: uuidv4(),
+            cart_description: event_name,
+            cart_currency: "PKR",
+            cart_amount: eventPriceOnInviteeUser,
+            tokenise: 2,
+            callback: callbackUrl,
+            return:
+              "https://4fde-154-192-136-20.ngrok-free.app/api/payment/return",
+            hide_shipping: true,
+            show_save_card: true,
+            user_defined: {
+              udf1: sessionKey,
+            },
+          },
+          {
+            headers: {
+              Authorization: process.env.PAYTAB_SERVER_KEY,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        // return res.redirect(response?.data?.redirect_url);
+        return res.status(200).json({
+          status: true,
+          result: { redirectUrl: response?.data?.redirect_url },
+        });
+      } catch (error) {
+        console.error("Error initiating subscription:", error);
+        return res.status(500).send("Failed to initiate subscription");
+      }
+    }
+
+    // return res.json("hello");
 
     // Insert into scheduling table
     const schedulingResult = await insertScheduling(

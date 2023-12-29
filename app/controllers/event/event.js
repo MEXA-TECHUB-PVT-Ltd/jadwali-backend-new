@@ -35,6 +35,17 @@ const getUserEventCount = async (user_id) => {
   const result = await pool.query(query, values);
   return parseInt(result.rows[0].count);
 };
+function generateRandomSuffix() {
+  // Generate a random letter (a-z)
+  const randomChar = String.fromCharCode(97 + Math.floor(Math.random() * 26));
+
+  // Generate a random number (0-99)
+  const randomNumber = Math.floor(Math.random() * 100);
+
+  // Return the combination of random letter and number
+  return `${randomChar}${randomNumber}`;
+}
+
 
 const eventExist = async (event_id) => {
   const query = "SELECT 1 FROM events WHERE id = $1";
@@ -71,6 +82,7 @@ exports.create = async (req, res) => {
   try {
     const doesUserExist = await userExist(user_id);
     if (doesUserExist) {
+      // Fixed condition check
       return res
         .status(404)
         .json({ status: false, message: "User does not exist" });
@@ -78,22 +90,13 @@ exports.create = async (req, res) => {
 
     const user_query = "SELECT * FROM users WHERE id = $1";
     const getUser = await pool.query(user_query, [user_id]);
-
     const username = getUser.rows[0].full_name || getUser.rows[0].email;
 
     let slug = slugify(name.toLowerCase(), "-");
     let usernameSlug = slugify(username.toLowerCase(), "-");
 
-    const eventNameQuery = "SELECT COUNT(*) FROM events WHERE name = $1";
-    const eventNameCount = await pool.query(eventNameQuery, [name]);
-    if (parseInt(eventNameCount.rows[0].count) > 0) {
-      slug += `-${eventNameCount.rows[0].count}`;
-    }
-    const userNameQuery = "SELECT COUNT(*) FROM events WHERE user_slug = $1";
-    const userNameCount = await pool.query(userNameQuery, [usernameSlug]);
-    if (parseInt(userNameCount.rows[0].count) > 0) {
-      usernameSlug += `-${eventNameCount.rows[0].count}`;
-    }
+    slug += `-${generateRandomSuffix()}`;
+    usernameSlug += `-${generateRandomSuffix()}`;
 
     const eventCount = await getUserEventCount(user_id);
     if (eventCount >= 6) {
@@ -102,6 +105,7 @@ exports.create = async (req, res) => {
         message: "Cannot create more than 6 events per user",
       });
     }
+
     const insertQuery =
       "INSERT INTO events (user_id, name, event_price, deposit_price, description, duration, one_to_one, slug, user_slug) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *";
     const values = [
@@ -115,6 +119,7 @@ exports.create = async (req, res) => {
       slug,
       usernameSlug,
     ];
+
     const result = await pool.query(insertQuery, values);
     const isFree = "free-schedule";
     const webviewURL = `${process.env.CLIENT_URL}/${isFree}/${usernameSlug}/${slug}`;
