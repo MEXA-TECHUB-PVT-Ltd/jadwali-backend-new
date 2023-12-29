@@ -84,6 +84,8 @@ exports.create = async (req, res) => {
 
     // ** handling paid events
     if (total_price || deposit_price) {
+      // Insert scheduling details to database to retrieve it on the callback URL
+      await pool.query(`INSERT INTO temp_schedule_details (user_id, envet)`);
       // if registered user is buying event we'll take the deposit price
       // if non registered user is buying event we take the total price
       const checkIfInviteeIsUser = await pool.query(
