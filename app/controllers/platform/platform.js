@@ -31,6 +31,7 @@ exports.get = async (req, res) => {
     {
       platformType: type,
       user_id: user_id,
+      SERVER_URL: process.env.LIVE_SERVER || 'http://localhost:3025/api',
     }
   );
 };

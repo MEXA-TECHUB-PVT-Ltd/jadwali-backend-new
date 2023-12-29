@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users(
     verify_email BOOLEAN DEFAULT FALSE,
     status TEXT DEFAULT NULL,
     payment TEXT DEFAULT FALSE,
+    is_bank_details BOOLEAN DEFAULT FALSE,
     block_status BOOLEAN DEFAULT FALSE,
     google_access_token TEXT DEFAULT NULL,
     google_refresh_token TEXT DEFAULT NULL,
@@ -223,6 +224,28 @@ CREATE TABLE IF NOT EXISTS subscription_payments (
     subscription_status VARCHAR(255) DEFAULT 'inactive',
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS event_payments (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    event_id INT REFERENCES events(id) ON DELETE CASCADE,
+    tran_ref VARCHAR(255),
+    merchant_id INT,
+    profile_id INT,
+    cart_id UUID,
+    cart_description TEXT,
+    cart_currency CHAR(3),
+    cart_amount DECIMAL(10, 2),
+    tran_currency CHAR(3),
+    tran_total DECIMAL(10, 2),
+    tran_type VARCHAR(50),
+    tran_class VARCHAR(50),
+    token VARCHAR(255),
+    customer_details JSONB,
+    payment_result JSONB,
+    payment_info JSONB,
+    ipn_trace VARCHAR(255),
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 CREATE TABLE IF NOT EXISTS queries(
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -233,3 +256,28 @@ CREATE TABLE IF NOT EXISTS queries(
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+CREATE TABLE IF NOT EXISTS bank_details(
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    bank_name VARCHAR(255),
+    account_name VARCHAR(255),
+    account_holder_number VARCHAR(255),
+    account_number VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- CREATE TABLE IF NOT EXISTS temp_schedule_details(
+--             event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+--     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        
+--         selected_date TEXT,
+--         selected_time TEXT,
+--         responses jsonb,
+--         type,
+--         platform_name,
+--         address,
+--         total_price,
+--         deposit_price,
+-- )

@@ -20,6 +20,7 @@ const payment = require("./payment/payment");
 const upload = require("./universal/upload");
 const queries = require("./queries/queries");
 const count = require("./universal/count");
+const bank_details = require("./bank_details/bank_details");
 
 
 router.use("/users", users);
@@ -40,6 +41,7 @@ router.use("/payment", payment);
 router.use("/universal", upload);
 router.use("/universal", count);
 router.use("/queries", queries);
+router.use("/bank_details", bank_details);
 
 
 module.exports = router;

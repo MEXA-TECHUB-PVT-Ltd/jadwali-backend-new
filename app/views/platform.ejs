@@ -27,12 +27,14 @@
         <ul class="requirements-list" id="requirements-list"></ul>
       </div>
       <% if (platformType === 'google') { %>
-      <a
-        href="http://localhost:3025/api/platform/connect-google?user_id=<%= user_id %>"
+      <a href="<%= SERVER_URL %>/platform/connect-google?user_id=<%= user_id %>"
         >Connect Google</a
       >
+
       <% } else if (platformType === 'zoom') { %>
-      <a href="http://localhost:3025/api/platform/connect-zoom?user_id=<%= user_id %>">Connect Zoom</a>
+      <a href="<%= SERVER_URL %>/platform/connect-zoom?user_id=<%= user_id %>"
+        >Connect Zoom</a
+      >
       <% } %>
     </div>
     <script src="/public/js/platform.js"></script>

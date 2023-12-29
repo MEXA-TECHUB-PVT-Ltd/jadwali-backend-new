@@ -10,6 +10,7 @@ const { v4: uuidv4 } = require("uuid");
 const axios = require("axios");
 const cron = require("node-cron");
 const moment = require("moment");
+const ejs = require("ejs");
 
 const app = express();
 
@@ -38,6 +39,33 @@ app.use("/test-route",(req,res)=>{
   res.send("hello world test 123")
 }
 )
+
+app.get("/email", (req, res) => {
+  // This data would normally come from your database or user input
+  const dataForEjs = {
+    verification_code: "1234", // Example verification code
+    date: new Date().toLocaleDateString("en-US"), // Example date
+    // Add other data you want to pass to the EJS template
+  };
+
+  // Define the path to your email template file
+  const emailTemplatePath = path.join(
+    __dirname,
+    "app",
+    "templates",
+    "auth",
+    "subscribe.ejs"
+  );
+
+  // Render the EJS template and send the HTML as a response
+  ejs.renderFile(emailTemplatePath, dataForEjs, (err, htmlContent) => {
+    if (err) {
+      console.error(err); // Handle the error in a way that's appropriate for your app
+      return res.status(500).send("Error rendering email template");
+    }
+    res.send(htmlContent); // Send the rendered HTML as the response
+  });
+});
 
 app.use("/payment", (req, res) => {
   res.render(path.join(__dirname, "app", "views", "payment.ejs"));

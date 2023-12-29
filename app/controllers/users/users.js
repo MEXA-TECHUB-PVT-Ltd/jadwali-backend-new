@@ -2,6 +2,9 @@ const { pool } = require("../../config/db.config");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const sendOtp = require("../../util/sendOTP");
+const ejs = require("ejs");
+const path = require("path");
+const sendEmail = require("../../lib/sendEmail");
 
 exports.create = async (req, res) => {
   const {
@@ -133,6 +136,14 @@ exports.create = async (req, res) => {
 
     const newUser = await pool.query(insertQuery, insertValues);
     userId = newUser.rows[0].id;
+
+    const emailHtml = await ejs.renderFile(
+      path.join(__dirname, "..", "..", "templates", "auth", "signup.ejs"),
+      {
+        userName: newUser.name,
+      }
+    );
+    await sendEmail(email, `Welcome Email`, emailHtml);
 
     delete newUser.rows[0].password;
     delete newUser.rows[0].otp;
@@ -296,11 +307,19 @@ exports.forgotPassword = async (req, res) => {
     }
     const user_id = checkUserExists.rows[0].id;
 
-    const emailResult = await sendOtp(email, res, user_id);
+    const otp = await sendOtp(email, res, user_id);
 
-    if (!emailResult.success) {
-      return res.status(500).json(emailResult);
-    }
+    const emailHtml = await ejs.renderFile(
+      path.join(__dirname, "..", "..", "templates", "auth", "verification.ejs"),
+      {
+        verification_code: otp,
+      }
+    );
+    await sendEmail(email, `Verification Code`, emailHtml);
+
+    // if (!emailResult.success) {
+    //   return res.status(500).json(emailResult);
+    // }
 
     return res.status(200).json({
       status: true,
