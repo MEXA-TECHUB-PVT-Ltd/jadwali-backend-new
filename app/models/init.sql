@@ -266,18 +266,19 @@ CREATE TABLE IF NOT EXISTS bank_details(
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
-
--- CREATE TABLE IF NOT EXISTS temp_schedule_details(
---             event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
---     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        
---         selected_date TEXT,
---         selected_time TEXT,
---         responses jsonb,
---         type,
---         platform_name,
---         address,
---         total_price,
---         deposit_price,
--- )
+CREATE TABLE IF NOT EXISTS temp_schedule_details(
+    id SERIAL PRIMARY KEY,
+    event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    selected_date TEXT,
+    selected_time TEXT,
+    responses jsonb [],
+    type TEXT,
+    platform_name TEXT,
+    address TEXT,
+    total_price TEXT,
+    deposit_price TEXT,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
