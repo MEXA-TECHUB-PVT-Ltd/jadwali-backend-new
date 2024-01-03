@@ -638,7 +638,8 @@ LEFT JOIN
 WHERE 
   u.id = $1 AND u.deleted_at IS NULL
 GROUP BY 
-  u.id, up.id, ap.id, ev.id;
+  u.id, up.id
+
     `;
 
     const result = await pool.query(userDetailsQuery, [id]);
