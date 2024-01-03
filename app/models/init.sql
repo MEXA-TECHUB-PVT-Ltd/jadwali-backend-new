@@ -252,7 +252,7 @@ CREATE TABLE IF NOT EXISTS queries(
     email VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
     status VARCHAR(255) NOT NULL DEFAULT 'pending',
-    -- pending, connected, dismissed,
+    -- pending, contacted, dismissed,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
