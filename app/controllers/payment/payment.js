@@ -1,6 +1,8 @@
 const { default: axios } = require("axios");
 const { pool } = require("../../config/db.config");
 const { v4: uuidv4 } = require("uuid");
+const moment = require("moment");
+const momentTimeZone = require("moment-timezone");
 
 const ejs = require("ejs");
 const jwt = require("jsonwebtoken");
@@ -21,7 +23,7 @@ const {
   renderEmailData,
 } = require("../../util/emailData");
 const { generateICSString } = require("../../lib/createICSFile");
-// 5200000000000007;
+// ** 5200000000000007;
 function getSessionData(sessionStore, sessionID) {
   return new Promise((resolve, reject) => {
     sessionStore.get(sessionID, (err, session) => {
@@ -36,350 +38,522 @@ function getSessionData(sessionStore, sessionID) {
 
 exports.paymentCallback = async (req, res) => {
   try {
-    const { user_defined } = req.body;
-    console.log("Received user_defined data:", user_defined);
-    const sessionKey = req.body.user_defined?.udf1;
+    const body = req.body;
+    const { temp_id, invitee_email, invitee_name } = req.query;
 
-    const sessionData = await getSessionData(sessionKey);
-    const scheduleDetails = sessionData?.scheduleDetails;
-    console.log(scheduleDetails);
+    console.log(body);
 
-    // const dateTimeStr = `${selected_date}T${convertScheduleDateTime(
-    //   selected_time
-    // )}:00.000Z`;
-    // let responsesString = udf5; // + udf6 + udf7 + ...; Concatenate if the string is spread across multiple udf fields
+    const paymentResult = body.payment_result.response_status;
 
-    console.log("sessionKey:", sessionKey);
+    switch (paymentResult) {
+      case "H":
+        // 	Hold (Authorised but on hold for further anti-fraud review)
+        await pool.query(
+          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
+          ["hold", temp_id]
+        );
+        console.log("Payment hold");
+        return res.status(200).json({ status: true, message: "Payment hold" });
 
-    // let parsedResponses;
-    // try {
-    //   // Parse the entire udf5 string as a JSON object
-    //   parsedResponses = JSON.parse(udf5);
-    //   console.log("Parsed Responses:", parsedResponses);
-    // } catch (error) {
-    //   console.error("Error parsing udf5 JSON:", error);
-    //   // Handle the parsing error appropriately
-    // }
+      case "D":
+        // Declined
+        console.log("Payment declined.");
+        await pool.query(
+          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
+          ["declined", temp_id]
+        );
+        return res
+          .status(200)
+          .json({ status: true, message: "Payment declined." });
 
-    // // If parsing was successful, process each response object
-    // if (parsedResponses) {
-    //   for (const response of parsedResponses) {
-    //     console.log("Processing response:", response);
-    //     // Now you can access properties like response.question_id, response.question_text, etc.
-    //   }
-    // } else {
-    //   console.log("No valid responses to process.");
-    // }
+      case "E":
+        // Error
+        console.log("Error");
+        await pool.query(
+          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
+          ["error", temp_id]
+        );
+        return res.status(200).json({ status: false, message: "Error" });
 
-    // let parsedResponses;
-    // try {
-    //   parsedResponses = JSON.parse(responsesString);
-    // } catch (error) {
-    //   console.error("Error parsing responses JSON:", error);
-    //   // Handle the parsing error appropriately
-    // }
+      case "X":
+        // Expired
+        console.log("Couldn't able to make payments. Expired!");
+        await pool.query(
+          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
+          ["expired", temp_id]
+        );
+        return res.status(500).json({
+          status: false,
+          message: "Couldn't able to make payments. Expired!",
+        });
 
-    // const scheduling_time = new Date(dateTimeStr).toISOString();
-    // // Insert into scheduling table
-    // const schedulingResult = await insertScheduling(
-    //   event_id,
-    //   user_id,
-    //   scheduling_time
-    // );
+      case "P":
+        // 	Pending (for refunds)
+        console.log("Pending the payment...");
+        await pool.query(
+          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
+          ["pending", temp_id]
+        );
+        return res
+          .status(200)
+          .json({ status: false, message: "Pending the payment..." });
 
-    // const userCheck = await pool.query("SELECT * FROM users WHERE id = $1", [
-    //   user_id,
-    // ]);
-    // const eventCheck = await pool.query("SELECT * FROM events WHERE id = $1", [
-    //   event_id,
-    // ]);
+      case "V":
+        // Voided
+        console.log("Voided payments.");
+        await pool.query(
+          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
+          ["voided", temp_id]
+        );
+        return res
+          .status(200)
+          .json({ status: false, message: "Voided payments." });
+      case "A":
+        // 	Authorized payment
+        console.log("Successfully authorized");
 
-    // const scheduling_id = schedulingResult.rows[0].id;
+        if (!temp_id) {
+          console.log("Temp schedule details Id is required");
+          // return res.status(404).json({
+          //   status: false,
+          //   message: "Temp schedule details Id is required",
+          // });
+        }
+        const temp_schedule_details = await pool.query(
+          `SELECT * FROM temp_schedule_details WHERE id = $1`,
+          [temp_id]
+        );
 
-    // // Store inserted responses with question details
-    // let insertedResponsesWithQuestions = [];
+        const type = temp_schedule_details.rows[0].type;
+        const status = temp_schedule_details.rows[0].status;
+        const user_id = temp_schedule_details.rows[0].user_id;
+        const address = temp_schedule_details.rows[0].address;
+        const event_id = temp_schedule_details.rows[0].event_id;
+        const responses = temp_schedule_details.rows[0].responses;
+        const total_price = temp_schedule_details.rows[0].total_price;
+        const deposit_price = temp_schedule_details.rows[0].deposit_price;
+        const platform_name = temp_schedule_details.rows[0].platform_name;
+        const scheduling_time = temp_schedule_details.rows[0].scheduling_time;
 
-    // console.log("Responsesssssssssssssss", udf5);
-    // // Insert responses and fetch question details
-    // for (const response of udf5) {
-    //   console.log("Response", response);
-    //   const { question_id, text, options } = response;
-    //   if (!question_id) {
-    //     console.error("Question ID is undefined for response:", response);
-    //     continue;
-    //   }
+        // insertPaymentDetails(user_id, event_id, body);
+        // // Insert into scheduling table
+        const schedulingResult = await insertScheduling(
+          event_id,
+          user_id,
+          scheduling_time
+        );
 
-    //   const result = await pool.query(
-    //     "INSERT INTO question_responses(schedule_id, question_id, text, options) VALUES($1, $2, $3, $4) RETURNING *",
-    //     [scheduling_id, question_id, text, options || []]
-    //   );
+        const userCheck = await pool.query(
+          "SELECT * FROM users WHERE id = $1",
+          [user_id]
+        );
+        const eventCheck = await pool.query(
+          "SELECT * FROM events WHERE id = $1",
+          [event_id]
+        );
 
-    //   const questionDetails = await pool.query(
-    //     "SELECT * FROM questions WHERE id = $1",
-    //     [question_id]
-    //   );
+        const scheduling_id = schedulingResult.rows[0].id;
 
-    //   insertedResponsesWithQuestions.push({
-    //     response: result.rows[0],
-    //     question: questionDetails.rows[0],
-    //   });
-    // }
+        // // Store inserted responses with question details
+        let insertedResponsesWithQuestions = [];
 
-    // const host_name = userCheck.rows[0].full_name;
-    // const host_email = userCheck.rows[0].email;
-    // const event_name = eventCheck.rows[0].name;
-    // const event_duration = eventCheck.rows[0].duration;
-    // const event_types = eventCheck.rows[0].one_to_one;
-    // const event_description = eventCheck.rows[0].description;
-    // const event_type = event_types
-    //   ? "One to One Meeting"
-    //   : "One to Many meetings";
-    // // const event_id = eventCheck.rows[0].ide
+        // Insert responses and fetch question details
+        for (const response of responses) {
+          console.log("Response", response);
+          const { question_id, text, options } = response;
+          if (!question_id) {
+            console.error("Question ID is undefined for response:", response);
+            continue;
+          }
 
-    // // Check if the invitee already exists
-    // const existingInviteeResult = await pool.query(
-    //   "SELECT * FROM invitee WHERE email = $1",
-    //   [invitee_email]
-    // );
+          const result = await pool.query(
+            "INSERT INTO question_responses(schedule_id, question_id, text, options) VALUES($1, $2, $3, $4) RETURNING *",
+            [scheduling_id, question_id, text, options || []]
+          );
 
-    // let invitee_id;
-    // let insertInvitee = null;
+          const questionDetails = await pool.query(
+            "SELECT * FROM questions WHERE id = $1",
+            [question_id]
+          );
 
-    // if (existingInviteeResult.rows.length > 0) {
-    //   // Invitee already exists, use existing ID and result
-    //   invitee_id = existingInviteeResult.rows[0].id;
-    //   insertInvitee = existingInviteeResult;
-    // } else {
-    //   // Insert new invitee and get ID
-    //   insertInvitee = await pool.query(
-    //     "INSERT INTO invitee(email, name) VALUES($1, $2) RETURNING *",
-    //     [invitee_email, invitee_name]
-    //   );
-    //   invitee_id = insertInvitee.rows[0].id;
-    // }
+          insertedResponsesWithQuestions.push({
+            response: result.rows[0],
+            question: questionDetails.rows[0],
+          });
+        }
 
-    // // Insert into invitee_scheduled
-    // const insertInviteeScheduled = await pool.query(
-    //   "INSERT INTO invitee_scheduled(schedule_id, invitee_id) VALUES($1, $2) RETURNING *",
-    //   [scheduling_id, invitee_id]
-    // );
+        const host_name = userCheck.rows[0].full_name;
+        const host_email = userCheck.rows[0].email;
+        const event_name = eventCheck.rows[0].name;
+        const event_duration = eventCheck.rows[0].duration;
+        const event_types = eventCheck.rows[0].one_to_one;
+        const event_description = eventCheck.rows[0].description;
+        const event_type = event_types
+          ? "One to One Meeting"
+          : "One to Many meetings";
+        // const event_id = eventCheck.rows[0].ide
 
-    // const token_id = jwt.sign({ id: scheduling_id }, process.env.JWT_SECRET, {
-    //   expiresIn: "1h",
-    // });
-    // const token_invitee_id = jwt.sign(
-    //   { id: invitee_id },
-    //   process.env.JWT_SECRET,
-    //   {
-    //     expiresIn: "1h",
-    //   }
-    // );
+        // Check if the invitee already exists
+        const existingInviteeResult = await pool.query(
+          "SELECT * FROM invitee WHERE email = $1",
+          [invitee_email]
+        );
 
-    // const cancelUrl = `${process.env.CLIENT_URL}/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
-    // const rescheduleUrl = `${process.env.CLIENT_URL}/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
+        let invitee_id;
+        let insertInvitee = null;
 
-    // // Convert scheduling_time to a Date object
-    // const startDateTime = new Date(scheduling_time);
+        if (existingInviteeResult.rows.length > 0) {
+          // Invitee already exists, use existing ID and result
+          invitee_id = existingInviteeResult.rows[0].id;
+          insertInvitee = existingInviteeResult;
+        } else {
+          // Insert new invitee and get ID
+          insertInvitee = await pool.query(
+            "INSERT INTO invitee(email, name) VALUES($1, $2) RETURNING *",
+            [invitee_email, invitee_name]
+          );
+          invitee_id = insertInvitee.rows[0].id;
+        }
 
-    // const endDateTime = new Date(
-    //   startDateTime.getTime() + event_duration * 60000
-    // );
+        // Insert into invitee_scheduled
+        const insertInviteeScheduled = await pool.query(
+          "INSERT INTO invitee_scheduled(schedule_id, invitee_id) VALUES($1, $2) RETURNING *",
+          [scheduling_id, invitee_id]
+        );
 
-    // // Prepare the event details for Google Calendar
-    // let eventDetails = {
-    //   name: event_name,
-    //   startDateTime: startDateTime.toISOString(),
-    //   endDateTime: endDateTime.toISOString(),
-    //   duration: event_duration,
-    //   description: event_description,
-    //   invitee_email,
-    //   invitee_name,
-    //   host_name,
-    //   host_email,
-    // };
+        const token_id = jwt.sign(
+          { id: scheduling_id },
+          process.env.JWT_SECRET,
+          {
+            expiresIn: "1h",
+          }
+        );
+        const token_invitee_id = jwt.sign(
+          { id: invitee_id },
+          process.env.JWT_SECRET,
+          {
+            expiresIn: "1h",
+          }
+        );
 
-    // let google_meet_link = "",
-    //   zoom_meeting_link = "",
-    //   google_calendar_event_id = "",
-    //   zoom_meeting_id = "";
+        const cancelUrl = `${process.env.CLIENT_URL}/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
+        const rescheduleUrl = `${process.env.CLIENT_URL}/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
 
-    // let isErrorCreatingOnlineEvent = false;
+        // Convert scheduling_time to a Date object
+        const startDateTime = new Date(scheduling_time);
 
-    // const google_expiry_at = userCheck.rows[0].google_expiry_at;
-    // const zoom_expiry_at = userCheck.rows[0].zoom_expiry_at;
-    // const currentTime = new Date();
+        const endDateTime = new Date(
+          startDateTime.getTime() + event_duration * 60000
+        );
 
-    // if (type === "online") {
-    //   try {
-    //     if (platform_name === "google") {
-    //       // Check if Google token has expired
-    //       if (new Date(google_expiry_at) <= currentTime) {
-    //         await refreshGoogleAccessToken(user_id);
-    //       } else {
-    //         console.log("Google token still valid, no need to refresh");
-    //       }
-    //     } else if (platform_name === "zoom") {
-    //       // Check if Zoom token has expired
-    //       if (new Date(zoom_expiry_at) <= currentTime) {
-    //         await refreshZoomAccessToken(user_id);
-    //       } else {
-    //         console.log("Zoom token still valid, no need to refresh");
-    //       }
-    //     }
-    //   } catch (tokenRefreshError) {
-    //     console.error("Token refresh failed:", tokenRefreshError);
-    //   }
-    // }
+        // Prepare the event details for Google Calendar
+        let eventDetails = {
+          name: event_name,
+          startDateTime: startDateTime.toISOString(),
+          endDateTime: endDateTime.toISOString(),
+          duration: event_duration,
+          description: event_description,
+          invitee_email,
+          invitee_name,
+          host_name,
+          host_email,
+        };
 
-    // // after we inserted the new token we're fetching the user again
-    // const afterUpdatedToken = await pool.query(
-    //   "SELECT * FROM users WHERE id = $1",
-    //   [user_id]
-    // );
-    // const userAfterNewTokens = afterUpdatedToken.rows[0];
+        let google_meet_link = "",
+          zoom_meeting_link = "",
+          google_calendar_event_id = "",
+          zoom_meeting_id = "";
 
-    // try {
-    //   let eventCreationResult;
+        let isErrorCreatingOnlineEvent = false;
 
-    //   if (type === "online") {
-    //     if (platform_name === "google") {
-    //       eventCreationResult = await createGoogleCalendarEvent(
-    //         userAfterNewTokens,
-    //         eventDetails
-    //       );
-    //       await pool.query(
-    //         "UPDATE schedule SET google_calendar_event_id = $1 RETURNING *",
-    //         [eventCreationResult.eventData?.id]
-    //       );
-    //     } else if (platform_name === "zoom") {
-    //       eventCreationResult = await createZoomEvent(
-    //         userAfterNewTokens,
-    //         eventDetails
-    //       );
-    //       await pool.query(
-    //         "UPDATE schedule SET zoom_meeting_link = $1, zoom_meeting_id = $2 RETURNING *",
-    //         [
-    //           eventCreationResult.eventData?.join_url,
-    //           eventCreationResult.eventData?.id,
-    //         ]
-    //       );
-    //     }
+        const google_expiry_at = userCheck.rows[0].google_expiry_at;
+        const zoom_expiry_at = userCheck.rows[0].zoom_expiry_at;
+        const currentTime = new Date();
 
-    //     if (!eventCreationResult.success) {
-    //       isErrorCreatingOnlineEvent = true;
-    //       console.log("Failed to create the event on", platform_name);
-    //     }
+        if (type === "online") {
+          try {
+            if (platform_name === "google") {
+              // Check if Google token has expired
+              if (new Date(google_expiry_at) <= currentTime) {
+                await refreshGoogleAccessToken(user_id);
+              } else {
+                console.log("Google token still valid, no need to refresh");
+              }
+            } else if (platform_name === "zoom") {
+              // Check if Zoom token has expired
+              if (new Date(zoom_expiry_at) <= currentTime) {
+                await refreshZoomAccessToken(user_id);
+              } else {
+                console.log("Zoom token still valid, no need to refresh");
+              }
+            }
+          } catch (tokenRefreshError) {
+            console.error("Token refresh failed:", tokenRefreshError);
+          }
+        }
 
-    //     if (platform_name === "google") {
-    //       google_meet_link = eventCreationResult.eventData?.meetLink;
-    //       google_calendar_event_id = eventCreationResult.eventData?.id;
-    //     } else if (platform_name === "zoom") {
-    //       zoom_meeting_link = eventCreationResult.eventData?.join_url;
-    //       zoom_meeting_id = eventCreationResult.eventData?.id;
-    //     }
-    //   }
-    // } catch (error) {
-    //   console.log(`Error handling online event creation: ${error}`);
-    // }
-    // const linkForSyncOnlinePlatforms = `${process.env.SERVER_URL}/platform/connect-${platform_name}?user_id=${user_id}`;
-    // const platform_meeting_link = google_meet_link
-    //   ? google_meet_link
-    //   : zoom_meeting_link;
+        // after we inserted the new token we're fetching the user again
+        const afterUpdatedToken = await pool.query(
+          "SELECT * FROM users WHERE id = $1",
+          [user_id]
+        );
+        const userAfterNewTokens = afterUpdatedToken.rows[0];
 
-    // const location =
-    //   type === "online"
-    //     ? {
-    //         type,
-    //         platform_name,
-    //         google_meet_link: platform_meeting_link,
-    //       }
-    //     : { type, address };
+        try {
+          let eventCreationResult;
 
-    // eventDetails["location"] = location;
+          if (type === "online") {
+            if (platform_name === "google") {
+              eventCreationResult = await createGoogleCalendarEvent(
+                userAfterNewTokens,
+                eventDetails
+              );
+              await pool.query(
+                "UPDATE schedule SET google_calendar_event_id = $1 RETURNING *",
+                [eventCreationResult.eventData?.id]
+              );
+            } else if (platform_name === "zoom") {
+              eventCreationResult = await createZoomEvent(
+                userAfterNewTokens,
+                eventDetails
+              );
+              await pool.query(
+                "UPDATE schedule SET zoom_meeting_link = $1, zoom_meeting_id = $2 RETURNING *",
+                [
+                  eventCreationResult.eventData?.join_url,
+                  eventCreationResult.eventData?.id,
+                ]
+              );
+            }
 
-    // const addCalendarLink = createAddToCalendarLink(eventDetails);
+            if (!eventCreationResult.success) {
+              isErrorCreatingOnlineEvent = true;
+              console.log("Failed to create the event on", platform_name);
+            }
 
-    // const formattedDateTime = moment(scheduling_time).format("LLLL");
+            if (platform_name === "google") {
+              google_meet_link = eventCreationResult.eventData?.meetLink;
+              google_calendar_event_id = eventCreationResult.eventData?.id;
+            } else if (platform_name === "zoom") {
+              zoom_meeting_link = eventCreationResult.eventData?.join_url;
+              zoom_meeting_id = eventCreationResult.eventData?.id;
+            }
+          }
+        } catch (error) {
+          console.log(`Error handling online event creation: ${error}`);
+        }
+        const linkForSyncOnlinePlatforms = `${process.env.SERVER_URL}/platform/connect-${platform_name}?user_id=${user_id}`;
+        const platform_meeting_link = google_meet_link
+          ? google_meet_link
+          : zoom_meeting_link;
 
-    // console.log(formattedDateTime);
+        const location =
+          type === "online"
+            ? {
+                type,
+                platform_name,
+                google_meet_link: platform_meeting_link,
+              }
+            : { type, address };
 
-    // try {
-    //   const { hostEmailRender, inviteeEmailRender } = await renderEmailData(
-    //     host_name,
-    //     event_type,
-    //     event_name,
-    //     undefined,
-    //     undefined,
-    //     responses,
-    //     formattedDateTime,
-    //     location,
-    //     cancelUrl,
-    //     rescheduleUrl,
-    //     isErrorCreatingOnlineEvent,
-    //     linkForSyncOnlinePlatforms,
-    //     addCalendarLink
-    //   );
-    //   const emailData = {
-    //     hostEmail: host_email,
-    //     inviteeEmail: invitee_email,
-    //     hostEmailContent: hostEmailRender,
-    //     inviteeEmailContent: inviteeEmailRender,
-    //     type: "schedule",
-    //     attachments: [
-    //       {
-    //         filename: "invite.ics",
-    //         content: generateICSString(eventDetails),
-    //         contentType: "text/calendar",
-    //       },
-    //     ],
-    //   };
+        eventDetails["location"] = location;
 
-    //   await sendEmailNotifications(emailData);
-    // } catch (sendEmailError) {
-    //   console.error(sendEmailError);
-    // }
+        const addCalendarLink = createAddToCalendarLink(eventDetails);
 
-    res.json({
-      status: true,
-      message: "Event scheduled Successfully!",
-      // scheduling: schedulingResult.rows[0],
-      // responses_with_questions: insertedResponsesWithQuestions,
-      // inviteeDetails: insertInvitee.rows[0],
-      // inviteeScheduled: insertInviteeScheduled.rows[0],
-    });
+        const formattedDateTime = moment(scheduling_time).format("LLLL");
+
+        try {
+          const { hostEmailRender, inviteeEmailRender } = await renderEmailData(
+            host_name,
+            event_type,
+            event_name,
+            undefined,
+            undefined,
+            responses,
+            formattedDateTime,
+            location,
+            cancelUrl,
+            rescheduleUrl,
+            isErrorCreatingOnlineEvent,
+            linkForSyncOnlinePlatforms,
+            addCalendarLink
+          );
+          const emailData = {
+            hostEmail: host_email,
+            inviteeEmail: invitee_email,
+            hostEmailContent: hostEmailRender,
+            inviteeEmailContent: inviteeEmailRender,
+            type: "schedule",
+            attachments: [
+              {
+                filename: "invite.ics",
+                content: generateICSString(eventDetails),
+                contentType: "text/calendar",
+              },
+            ],
+          };
+
+          await sendEmailNotifications(emailData);
+        } catch (sendEmailError) {
+          console.error(sendEmailError);
+        }
+
+        await pool.query(
+          `
+            UPDATE temp_schedule_details SET
+                status = $1,
+                tran_ref = $2,
+                merchant_id = $3,
+                profile_id = $4,
+                cart_id = $5,
+                cart_description = $6,
+                cart_currency = $7,
+                cart_amount = $8,
+                tran_currency = $9,
+                tran_total = $10,
+                tran_type = $11,
+                tran_class = $12,
+                token = $13,
+                customer_details = $14,
+                payment_result = $15,
+                payment_info = $16,
+                ipn_trace = $17,
+                updated_at = NOW()
+            WHERE id = $18`,
+          [
+            "successful",
+            body.tran_ref,
+            body.merchant_id,
+            body.profile_id,
+            body.cart_id,
+            body.cart_description,
+            body.cart_currency,
+            body.cart_amount,
+            body.tran_currency,
+            body.tran_total,
+            body.tran_type,
+            body.tran_class,
+            body.token,
+            JSON.stringify(body.customer_details),
+            JSON.stringify(body.payment_result),
+            JSON.stringify(body.payment_info),
+            body.ipn_trace,
+            temp_id,
+          ]
+        );
+
+        return res.json({
+          status: true,
+          message: "Event scheduled Successfully!",
+          scheduling: schedulingResult.rows[0],
+          responses_with_questions: insertedResponsesWithQuestions,
+          inviteeDetails: insertInvitee.rows[0],
+          inviteeScheduled: insertInviteeScheduled.rows[0],
+        });
+
+      default:
+        console.log("Couldn't able to make payments.");
+        return res
+          .status(500)
+          .json({ status: false, message: "Couldn't able to make payments." });
+    }
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ status: false, error: err.message });
+    return res.status(500).json({ status: false, error: err.message });
   }
 };
 
 exports.paymentReturn = async (req, res) => {
   try {
-    // This data would normally come from your database or user input
+    const { temp_id: id, invitee_email: email, invitee_name: name } = req.query;
+    // console.log("return query", req.query);
+
+    const scheduledEvent = await pool.query(
+      "SELECT * FROM temp_schedule_details WHERE id = $1",
+      [id]
+    );
+
+    if (scheduledEvent.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ status: false, message: "Scheduled event not found" });
+    }
+
+    // Assuming the first row contains the necessary data
+    const eventData = scheduledEvent.rows[0];
+    const timezone = momentTimeZone.tz.guess();
+
+    const startTime = moment(eventData.scheduling_time).tz(timezone);
+    const endTime = startTime.clone().add(30, "minutes");
+    const timeRange = `${startTime.format("hh:mma")} - ${endTime.format(
+      "hh:mma"
+    )}, ${startTime.format("dddd, MMMM Do, YYYY")}`;
+
+    // Prepare data for EJS template
     const dataForEjs = {
-      verification_code: "1234", // Example verification code
-      date: new Date().toLocaleDateString("en-US"), // Example date
-      // Add other data you want to pass to the EJS template
+      eventId: eventData.event_id,
+      userId: eventData.user_id,
+      email: email,
+      name: name,
+      schedulingTime: timeRange,
+      responses: eventData.responses,
+      type: eventData.type,
+      platformName: eventData.platform_name,
+      address: eventData.address,
+      totalPrice: eventData.total_price,
+      depositPrice: eventData.deposit_price,
+      status: eventData.status,
+      createdAt: eventData.created_at,
+      updatedAt: eventData.updated_at,
     };
 
-    // Define the path to your email template file
     const emailTemplatePath = path.join(
       __dirname,
       "..",
       "..",
-      "templates",
-      "auth",
-      "subscribe.ejs"
+      "views",
+      "pay.ejs"
     );
 
-    // Render the EJS template and send the HTML as a response
     ejs.renderFile(emailTemplatePath, dataForEjs, (err, htmlContent) => {
       if (err) {
-        console.error(err); // Handle the error in a way that's appropriate for your app
+        console.error(err);
         return res.status(500).send("Error rendering email template");
       }
-      res.send(htmlContent); // Send the rendered HTML as the response
+      res.send(htmlContent);
     });
+  } catch (error) {
+    console.log("Payment Return Error", error.message);
+    return res
+      .status(500)
+      .json({ status: false, message: "Internal server error" });
+  }
+};
+
+// update the status "paid" after admin has been paid to user for the event
+exports.updateUserPaymentStatus = async (req, res) => {
+  const { id, status } = req.body;
+  if (!id || !status) { 
+    return res.status(400).json({ status: false, message: "id and status are required" });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE temp_schedule_details SET paid_to_user = $1 WHERE id = $2 RETURNING *`,
+      [status, id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(400).json({
+        status: false,
+        message: "Something went wrong while updating record",
+      });
+    }
+    return res
+      .status(200)
+      .json({
+        status: true,
+        message: "Record updated successfully",
+        result: result.rows[0],
+      });
   } catch (error) {
     console.log("Payment Return Error", error.message);
     return res
