@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS question_responses (
     options TEXT [],
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
-);
+); 
 CREATE TABLE IF NOT EXISTS invitee(
     id SERIAL PRIMARY KEY,
     email TEXT NULL UNIQUE,
