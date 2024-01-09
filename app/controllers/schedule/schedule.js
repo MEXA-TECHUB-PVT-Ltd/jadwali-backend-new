@@ -128,9 +128,9 @@ exports.create = async (req, res) => {
         total_price,
         deposit_price,
       };
-      const callbackUrl = `https://fa56-154-192-138-6.ngrok-free.app/api/payment/callback?temp_id=${temp_schedule_id}&invitee_email=${invitee_email}&invitee_name=${invitee_name}`;
+      const callbackUrl = `${process.env.LIVE_SERVER}/payment/callback?temp_id=${temp_schedule_id}&invitee_email=${invitee_email}&invitee_name=${invitee_name}`;
 
-      const returnUrl = `https://fa56-154-192-138-6.ngrok-free.app/api/payment/return?temp_id=${temp_schedule_id}&invitee_email=${invitee_email}&invitee_name=${invitee_name}`;
+      const returnUrl = `${process.env.LIVE_SERVER}/payment/return?temp_id=${temp_schedule_id}&invitee_email=${invitee_email}&invitee_name=${invitee_name}`;
 
       // paytabs payment
       try {
