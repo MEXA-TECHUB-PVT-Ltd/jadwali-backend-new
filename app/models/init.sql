@@ -161,6 +161,8 @@ CREATE TABLE IF NOT EXISTS schedule (
     zoom_meeting_link TEXT,
     status VARCHAR(50) DEFAULT 'pending',
     -- can be pending, scheduled, rescheduled, cancelled
+    -- add column to keep track of payment whether deposit or full paid?
+    -- payment_type VARCHAR(50), -- deposit || complete
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -272,6 +274,7 @@ CREATE TABLE IF NOT EXISTS temp_schedule_details(
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     selected_date TEXT,
     selected_time TEXT,
+    scheduling_time TIMESTAMP WITH TIME ZONE,
     responses jsonb [],
     type TEXT,
     platform_name TEXT,
@@ -279,6 +282,24 @@ CREATE TABLE IF NOT EXISTS temp_schedule_details(
     total_price TEXT,
     deposit_price TEXT,
     status TEXT DEFAULT 'pending',
+    paid_to_user TEXT DEFAULT 'pending',
+    -- payment_type VARCHAR(255),
+    tran_ref VARCHAR(255),
+    merchant_id INT,
+    profile_id INT,
+    cart_id UUID,
+    cart_description TEXT,
+    cart_currency CHAR(3),
+    cart_amount DECIMAL(10, 2),
+    tran_currency CHAR(3),
+    tran_total DECIMAL(10, 2),
+    tran_type VARCHAR(50),
+    tran_class VARCHAR(50),
+    token VARCHAR(255),
+    customer_details JSONB,
+    payment_result JSONB,
+    payment_info JSONB,
+    ipn_trace VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

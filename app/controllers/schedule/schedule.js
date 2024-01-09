@@ -60,6 +60,7 @@ exports.create = async (req, res) => {
   const { invitee_email, invitee_name, error } = extractInviteeDetails(
     req.body.responses
   );
+
   if (error) {
     return res.status(400).json({ status: false, message: error });
   }
@@ -84,8 +85,26 @@ exports.create = async (req, res) => {
 
     // ** handling paid events
     if (total_price || deposit_price) {
+      // return res.send('hello')
       // Insert scheduling details to database to retrieve it on the callback URL
-      await pool.query(`INSERT INTO temp_schedule_details (user_id, envet)`);
+      const temp_schedule = await pool.query(
+        `INSERT INTO temp_schedule_details (user_id, event_id,scheduling_time, responses, type, platform_name, address, total_price, deposit_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [
+          user_id,
+          event_id,
+          scheduling_time,
+          responses,
+          type,
+          platform_name,
+          address,
+          total_price,
+          deposit_price,
+        ]
+      );
+
+      // get the temp schedule id, send query params to callback, retrieve the data after successful payment to schedule the event
+      const temp_schedule_id = temp_schedule.rows[0].id;
+
       // if registered user is buying event we'll take the deposit price
       // if non registered user is buying event we take the total price
       const checkIfInviteeIsUser = await pool.query(
@@ -109,7 +128,9 @@ exports.create = async (req, res) => {
         total_price,
         deposit_price,
       };
-      const callbackUrl = `https://4fde-154-192-136-20.ngrok-free.app/api/payment/callback`;
+      const callbackUrl = `https://fa56-154-192-138-6.ngrok-free.app/api/payment/callback?temp_id=${temp_schedule_id}&invitee_email=${invitee_email}&invitee_name=${invitee_name}`;
+
+      const returnUrl = `https://fa56-154-192-138-6.ngrok-free.app/api/payment/return?temp_id=${temp_schedule_id}&invitee_email=${invitee_email}&invitee_name=${invitee_name}`;
 
       // paytabs payment
       try {
@@ -125,13 +146,9 @@ exports.create = async (req, res) => {
             cart_amount: eventPriceOnInviteeUser,
             tokenise: 2,
             callback: callbackUrl,
-            return:
-              "https://4fde-154-192-136-20.ngrok-free.app/api/payment/return",
+            return: returnUrl,
             hide_shipping: true,
             show_save_card: true,
-            user_defined: {
-              udf1: sessionKey,
-            },
           },
           {
             headers: {
@@ -150,9 +167,8 @@ exports.create = async (req, res) => {
         console.error("Error initiating subscription:", error);
         return res.status(500).send("Failed to initiate subscription");
       }
-    }
+    }    
 
-    // return res.json("hello");
 
     // Insert into scheduling table
     const schedulingResult = await insertScheduling(
@@ -409,7 +425,7 @@ exports.create = async (req, res) => {
       inviteeScheduled: insertInviteeScheduled.rows[0],
     });
   } catch (err) {
-    console.error(err.message);
+    console.error("Error!", err);
     res.status(500).json({ status: false, error: err.message });
   }
 };
@@ -957,5 +973,106 @@ ORDER BY
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
+
+exports.getTempSchedule = async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+
+    try {
+      // Fetch the scheduled event
+      const scheduledEvent = await pool.query(
+        `
+        SELECT 
+    temp.*, 
+    json_build_object(
+        'user', u.*,
+        'event', e.*,
+        'bank', b.*
+    ) AS details 
+FROM 
+    temp_schedule_details temp
+LEFT JOIN 
+    users u ON temp.user_id = u.id 
+LEFT JOIN 
+    events e ON temp.event_id = e.id 
+LEFT JOIN 
+    bank_details b ON temp.user_id = b.user_id
+WHERE 
+    temp.id = $1;
+        `,
+        [id]
+      );
+      if (scheduledEvent.rowCount === 0) {
+        return res
+          .status(404)
+          .json({ status: false, message: "Scheduled event not found" });
+      }
+      res.json({
+        status: true,
+        message: "Scheduled event retrieved successfully",
+        result: scheduledEvent.rows[0],
+      });
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).json({ status: false, message: err.message });
+    }
+}
+
+
+exports.getAllTempSchedules = async (req, res) => {
+  // Pagination parameters
+  const page = parseInt(req.query.page, 10) || 1; // Default to 1 if not provided
+  const limit = parseInt(req.query.limit, 10) || 10; // Default to 10 if not provided
+  const offset = (page - 1) * limit;
+
+  try {
+    // Fetch the scheduled events with pagination
+    const scheduledEvents = await pool.query(
+      `
+            SELECT 
+                temp.*, 
+                json_build_object(
+                    'user', u.*,
+                    'event', e.*,
+                    'bank', b.*
+                ) AS details 
+            FROM 
+                temp_schedule_details temp
+            LEFT JOIN 
+                users u ON temp.user_id = u.id 
+            LEFT JOIN 
+                events e ON temp.event_id = e.id 
+            LEFT JOIN 
+                bank_details b ON temp.user_id = b.user_id
+            ORDER BY 
+                temp.created_at DESC
+            LIMIT 
+                $1 OFFSET $2;
+            `,
+      [limit, offset]
+    );
+
+    // Fetch total count of records for pagination
+    const totalResult = await pool.query(
+      "SELECT COUNT(*) FROM temp_schedule_details"
+    );
+    const total = parseInt(totalResult.rows[0].count, 10);
+
+    res.json({
+      status: true,
+      message: "Scheduled events retrieved successfully",
+      result: scheduledEvents.rows,
+      pagination: {
+        total: total,
+        page: page,
+        limit: limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ status: false, message: err.message });
   }
 };

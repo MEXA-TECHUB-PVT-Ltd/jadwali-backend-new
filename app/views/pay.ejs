@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Scheduled Event</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+            margin: 20px;
+            padding: 25px;
+        }
+
+        .card h1, .card h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .card p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .card-content {
+            text-align: center;
+        }
+
+        .card img {
+            max-width: 100px;
+            margin-bottom: 20px;
+        }
+
+        .info {
+            text-align: left;
+            margin-top: 20px;
+        }
+
+        .info div {
+            margin-bottom: 10px;
+        }
+
+        .info b {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .status-message {
+            color: #d32f2f; /* Red for errors and declines */
+            margin-top: 20px;
+        }
+
+        .status-message.success {
+            color: #388e3c; /* Green for success */
+        }
+
+        .status-message.pending {
+            color: #ffa000; /* Amber for pending */
+        }
+
+        .button {
+            background: #009688;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            display: inline-block;
+            margin-top: 20px;
+            border-radius: 4px;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="card-content">
+            <% if (status === "successful") { %>
+                <!-- Success Content -->
+                <img src="https://res.cloudinary.com/dxfdrtxi3/image/upload/v1704720764/logopink_j85flx.png" alt="JADWALI" />
+                <h1>You are scheduled</h1>
+                <p>A calendar invitation has been sent to your email address.</p>
+                <div class="info">
+                    <div>Name: <b><%= name %></b></div>
+                    <div>Email: <b><%= email %></b></div>
+                    <div>Time: <b><%= schedulingTime %></b></div>
+                </div>
+            <% } else { %>
+                <div class="status-message <% if (status === "pending") { %>pending<% } else { %>error<% } %>">
+<% if (status === "hold") { %>
+    <h2>Payment On Hold</h2>
+    <p>Your payment is currently on hold. We may need additional information to process your payment. Please check your email for further instructions or contact support.</p>
+<% } else if (status === "declined") { %>
+    <h2>Payment Declined</h2>
+    <p>Unfortunately, your payment has been declined. This could be due to insufficient funds, a typo in your payment information, or other reasons. Please try again with a different payment method or contact your bank for more information.</p>
+<% } else if (status === "error") { %>
+    <h2>Error in Payment</h2>
+    <p>An error occurred during the payment process. This might be a temporary issue. Please try again later, or contact our support team for assistance.</p>
+<% } else if (status === "expired") { %>
+    <h2>Payment Expired</h2>
+    <p>Your payment session has expired due to inactivity. Please start the payment process again. For assistance, feel free to contact our support team.</p>
+<% } else if (status === "pending") { %>
+    <h2>Payment Pending</h2>
+    <p>Your payment is currently being processed. We will notify you once the transaction is complete. If you don't receive a confirmation within a reasonable timeframe, please contact support.</p>
+<% } else if (status === "voided") { %>
+    <h2>Payment Voided</h2>
+    <p>Your payment has been voided, and no charges have been made. If this was not intended, please contact us to resolve the issue or to attempt the payment again.</p>
+<% } else { %>
+    <h2>Payment Status Unknown</h2>
+    <p>The status of your payment could not be determined at this time. Please check your email for any transaction updates or contact our support team for further assistance.</p>
+<% } %>
+                </div>
+            <% } %>
+        </div>
+    </div>
+</body>
+</html>
