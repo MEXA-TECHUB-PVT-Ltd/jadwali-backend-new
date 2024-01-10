@@ -41,16 +41,64 @@ exports.paymentCallback = async (req, res) => {
     const body = req.body;
     const { temp_id, invitee_email, invitee_name } = req.query;
 
-    console.log(body);
+    // console.log(body);
 
     const paymentResult = body.payment_result.response_status;
+
+    if (!temp_id) {
+      console.log("Temp schedule details Id is required");
+      // return res.status(404).json({
+      //   status: false,
+      //   message: "Temp schedule details Id is required",
+      // });
+    }
+    const temp_schedule_details = await pool.query(
+      `SELECT * FROM temp_schedule_details WHERE id = $1`,
+      [temp_id]
+    );
+
+    const type = temp_schedule_details.rows[0].type;
+    const status = temp_schedule_details.rows[0].status;
+    const user_id = temp_schedule_details.rows[0].user_id;
+    const address = temp_schedule_details.rows[0].address;
+    const event_id = temp_schedule_details.rows[0].event_id;
+    const responses = temp_schedule_details.rows[0].responses;
+    const total_price = temp_schedule_details.rows[0].total_price;
+    const deposit_price = temp_schedule_details.rows[0].deposit_price;
+    const platform_name = temp_schedule_details.rows[0].platform_name;
+    const scheduling_time = temp_schedule_details.rows[0].scheduling_time;
+
+    const is_deposit_paid =
+      body?.tran_total === deposit_price + ".00" ? true : false;
+
+    console.log({
+      is_deposit_paid,
+      deposit_price,
+      tran_total: body.tran_total,
+    });
+
+    // insertPaymentDetails(user_id, event_id, body);
+    // // Insert into scheduling table
+    const schedulingResult = await pool.query(
+      "INSERT INTO schedule(event_id, user_id, scheduling_time, status, payment_status, is_deposit_paid) VALUES($1, $2, $3, $4, $5, $6) RETURNING *",
+      [event_id, user_id, scheduling_time, "scheduled", true, is_deposit_paid]
+    );
+
+    const userCheck = await pool.query("SELECT * FROM users WHERE id = $1", [
+      user_id,
+    ]);
+    const eventCheck = await pool.query("SELECT * FROM events WHERE id = $1", [
+      event_id,
+    ]);
+
+    const scheduling_id = schedulingResult.rows[0].id;
 
     switch (paymentResult) {
       case "H":
         // 	Hold (Authorised but on hold for further anti-fraud review)
         await pool.query(
-          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
-          ["hold", temp_id]
+          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $3`,
+          ["hold", scheduling_id, temp_id]
         );
         console.log("Payment hold");
         return res.status(200).json({ status: true, message: "Payment hold" });
@@ -59,8 +107,8 @@ exports.paymentCallback = async (req, res) => {
         // Declined
         console.log("Payment declined.");
         await pool.query(
-          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
-          ["declined", temp_id]
+          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
+          ["declined", scheduling_id, temp_id]
         );
         return res
           .status(200)
@@ -70,8 +118,8 @@ exports.paymentCallback = async (req, res) => {
         // Error
         console.log("Error");
         await pool.query(
-          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
-          ["error", temp_id]
+          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
+          ["error", scheduling_id, temp_id]
         );
         return res.status(200).json({ status: false, message: "Error" });
 
@@ -79,8 +127,8 @@ exports.paymentCallback = async (req, res) => {
         // Expired
         console.log("Couldn't able to make payments. Expired!");
         await pool.query(
-          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
-          ["expired", temp_id]
+          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
+          ["expired", scheduling_id, temp_id]
         );
         return res.status(500).json({
           status: false,
@@ -91,8 +139,8 @@ exports.paymentCallback = async (req, res) => {
         // 	Pending (for refunds)
         console.log("Pending the payment...");
         await pool.query(
-          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
-          ["pending", temp_id]
+          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
+          ["pending", scheduling_id, temp_id]
         );
         return res
           .status(200)
@@ -102,8 +150,8 @@ exports.paymentCallback = async (req, res) => {
         // Voided
         console.log("Voided payments.");
         await pool.query(
-          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
-          ["voided", temp_id]
+          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
+          ["voided", scheduling_id, temp_id]
         );
         return res
           .status(200)
@@ -111,48 +159,6 @@ exports.paymentCallback = async (req, res) => {
       case "A":
         // 	Authorized payment
         console.log("Successfully authorized");
-
-        if (!temp_id) {
-          console.log("Temp schedule details Id is required");
-          // return res.status(404).json({
-          //   status: false,
-          //   message: "Temp schedule details Id is required",
-          // });
-        }
-        const temp_schedule_details = await pool.query(
-          `SELECT * FROM temp_schedule_details WHERE id = $1`,
-          [temp_id]
-        );
-
-        const type = temp_schedule_details.rows[0].type;
-        const status = temp_schedule_details.rows[0].status;
-        const user_id = temp_schedule_details.rows[0].user_id;
-        const address = temp_schedule_details.rows[0].address;
-        const event_id = temp_schedule_details.rows[0].event_id;
-        const responses = temp_schedule_details.rows[0].responses;
-        const total_price = temp_schedule_details.rows[0].total_price;
-        const deposit_price = temp_schedule_details.rows[0].deposit_price;
-        const platform_name = temp_schedule_details.rows[0].platform_name;
-        const scheduling_time = temp_schedule_details.rows[0].scheduling_time;
-
-        // insertPaymentDetails(user_id, event_id, body);
-        // // Insert into scheduling table
-        const schedulingResult = await insertScheduling(
-          event_id,
-          user_id,
-          scheduling_time
-        );
-
-        const userCheck = await pool.query(
-          "SELECT * FROM users WHERE id = $1",
-          [user_id]
-        );
-        const eventCheck = await pool.query(
-          "SELECT * FROM events WHERE id = $1",
-          [event_id]
-        );
-
-        const scheduling_id = schedulingResult.rows[0].id;
 
         // // Store inserted responses with question details
         let insertedResponsesWithQuestions = [];
@@ -418,8 +424,10 @@ exports.paymentCallback = async (req, res) => {
                 payment_result = $15,
                 payment_info = $16,
                 ipn_trace = $17,
+                scheduling_id = $18,
+                is_deposit_paid = $19,
                 updated_at = NOW()
-            WHERE id = $18`,
+            WHERE id = $20`,
           [
             "successful",
             body.tran_ref,
@@ -438,6 +446,8 @@ exports.paymentCallback = async (req, res) => {
             JSON.stringify(body.payment_result),
             JSON.stringify(body.payment_info),
             body.ipn_trace,
+            scheduling_id,
+            is_deposit_paid,
             temp_id,
           ]
         );
@@ -533,8 +543,10 @@ exports.paymentReturn = async (req, res) => {
 // update the status "paid" after admin has been paid to user for the event
 exports.updateUserPaymentStatus = async (req, res) => {
   const { id, status } = req.body;
-  if (!id || !status) { 
-    return res.status(400).json({ status: false, message: "id and status are required" });
+  if (!id || !status) {
+    return res
+      .status(400)
+      .json({ status: false, message: "id and status are required" });
   }
   try {
     const result = await pool.query(
@@ -547,15 +559,174 @@ exports.updateUserPaymentStatus = async (req, res) => {
         message: "Something went wrong while updating record",
       });
     }
-    return res
-      .status(200)
-      .json({
-        status: true,
-        message: "Record updated successfully",
-        result: result.rows[0],
-      });
+    return res.status(200).json({
+      status: true,
+      message: "Record updated successfully",
+      result: result.rows[0],
+    });
   } catch (error) {
     console.log("Payment Return Error", error.message);
+    return res
+      .status(500)
+      .json({ status: false, message: "Internal server error" });
+  }
+};
+exports.remainingPayment = async (req, res) => {
+  const {
+    schedule_id: scheduling_id,
+    remaining_payment,
+    event_name,
+  } = req.body;
+  if (!scheduling_id || !remaining_payment || !event_name) {
+    return res.status(400).json({
+      status: false,
+      message: "schedule_id, remaining_payment, event_name is required",
+    });
+  }
+
+  try {
+    const callbackUrl = `${process.env.LIVE_SERVER}/payment/remainingPaymentCallback?scheduling_id=${scheduling_id}`;
+    const response = await axios.post(
+      "https://secure-global.paytabs.com/payment/request",
+      {
+        profile_id: process.env.PAYTAB_PROFILE_ID,
+        tran_type: "sale",
+        tran_class: "ecom",
+        cart_id: uuidv4(),
+        cart_description: event_name,
+        cart_currency: "PKR",
+        cart_amount: remaining_payment,
+        tokenise: 2,
+        callback: callbackUrl,
+        // return: returnUrl,/
+        hide_shipping: true,
+        show_save_card: true,
+      },
+      {
+        headers: {
+          Authorization: process.env.PAYTAB_SERVER_KEY,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    return res.status(200).json({
+      status: true,
+      result: { redirectUrl: response?.data?.redirect_url },
+    });
+  } catch (error) {
+    console.error("Payment Return Error", error);
+    return res
+      .status(500)
+      .json({ status: false, message: "Internal server error" });
+  }
+};
+
+exports.remainingPaymentCallback = async (req, res) => {
+  const { scheduling_id } = req.query;
+  const paymentResult = req.body.payment_result.response_status;
+
+  try {
+    switch (paymentResult) {
+      case "H":
+        // 	Hold (Authorised but on hold for further anti-fraud review)
+        await pool.query(
+          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $3`,
+          ["hold", scheduling_id, temp_id]
+        );
+        console.log("Payment hold");
+        return res.status(200).json({ status: true, message: "Payment hold" });
+
+      case "D":
+        // Declined
+        console.log("Payment declined.");
+        await pool.query(
+          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
+          ["declined", scheduling_id, temp_id]
+        );
+        return res
+          .status(200)
+          .json({ status: true, message: "Payment declined." });
+
+      case "E":
+        // Error
+        console.log("Error");
+        await pool.query(
+          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
+          ["error", scheduling_id, temp_id]
+        );
+        return res.status(200).json({ status: false, message: "Error" });
+
+      case "X":
+        // Expired
+        console.log("Couldn't able to make payments. Expired!");
+        await pool.query(
+          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
+          ["expired", scheduling_id, temp_id]
+        );
+        return res.status(500).json({
+          status: false,
+          message: "Couldn't able to make payments. Expired!",
+        });
+
+      case "P":
+        // 	Pending (for refunds)
+        console.log("Pending the payment...");
+        await pool.query(
+          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
+          ["pending", scheduling_id, temp_id]
+        );
+        return res
+          .status(200)
+          .json({ status: false, message: "Pending the payment..." });
+
+      case "V":
+        // Voided
+        console.log("Voided payments.");
+        await pool.query(
+          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
+          ["voided", scheduling_id, temp_id]
+        );
+        return res
+          .status(200)
+          .json({ status: false, message: "Voided payments." });
+      case "A":
+        // 	Authorized payment
+        console.log("Successfully authorized");
+        // console.log({ scheduling_id });
+        const updatedTemp = await pool.query(
+          `UPDATE temp_schedule_details SET is_deposit_paid = $1 WHERE scheduling_id = $2`,
+          [false, scheduling_id]
+        );
+        const updatedSch = await pool.query(
+          `UPDATE schedule SET is_deposit_paid = $1 WHERE id = $2`,
+          [false, scheduling_id]
+        );
+
+        if (updatedTemp.rowCount === 0) {
+          return res.status({
+            status: false,
+            message: "Temp not updated",
+          });
+        }
+        if (updatedSch.rowCount === 0) {
+          return res.status({
+            status: false,
+            message: "Sch not updated",
+          });
+        }
+        return res.status(200).json({
+          status: true,
+          message: "Remaining payment was successfully processed!",
+          // result: { redirectUrl: response?.data?.redirect_url },
+        });
+      default:
+        console.log("Couldn't able to make payments.");
+        return res
+          .status(500)
+          .json({ status: false, message: "Couldn't able to make payments." });
+    }
+  } catch (error) {
+    console.error("Payment Return Error", error);
     return res
       .status(500)
       .json({ status: false, message: "Internal server error" });
