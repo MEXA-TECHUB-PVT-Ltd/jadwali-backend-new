@@ -3,9 +3,9 @@ const router = express.Router();
 const controller = require("../../controllers/payment/payment");
 
 router.post("/return", controller.paymentReturn);
-router.put("/updateUserPaymentStatus", controller.updateUserPaymentStatus);
-router.get("/return", controller.paymentReturn);
-router.get("/callback", controller.paymentCallback);
+router.post("/remainingPaymentCallback", controller.remainingPaymentCallback);
 router.post("/callback", controller.paymentCallback);
+router.put("/updateUserPaymentStatus", controller.updateUserPaymentStatus);
+router.put("/remainingPayment", controller.remainingPayment);
 
 module.exports = router;

@@ -162,7 +162,9 @@ CREATE TABLE IF NOT EXISTS schedule (
     status VARCHAR(50) DEFAULT 'pending',
     -- can be pending, scheduled, rescheduled, cancelled
     -- add column to keep track of payment whether deposit or full paid?
-    -- payment_type VARCHAR(50), -- deposit || complete
+    payment_status BOOLEAN DEFAULT FALSE,
+    is_deposit_paid BOOLEAN DEFAULT FALSE,
+    -- deposit || complete
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -174,7 +176,7 @@ CREATE TABLE IF NOT EXISTS question_responses (
     options TEXT [],
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
-); 
+);
 CREATE TABLE IF NOT EXISTS invitee(
     id SERIAL PRIMARY KEY,
     email TEXT NULL UNIQUE,
@@ -270,6 +272,7 @@ CREATE TABLE IF NOT EXISTS bank_details(
 );
 CREATE TABLE IF NOT EXISTS temp_schedule_details(
     id SERIAL PRIMARY KEY,
+    scheduling_id INT REFERENCES schedule(id) ON DELETE CASCADE,
     event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     selected_date TEXT,
@@ -283,7 +286,8 @@ CREATE TABLE IF NOT EXISTS temp_schedule_details(
     deposit_price TEXT,
     status TEXT DEFAULT 'pending',
     paid_to_user TEXT DEFAULT 'pending',
-    -- payment_type VARCHAR(255),
+    is_deposit_paid BOOLEAN DEFAULT FALSE,
+    -- deposit || complete
     tran_ref VARCHAR(255),
     merchant_id INT,
     profile_id INT,
