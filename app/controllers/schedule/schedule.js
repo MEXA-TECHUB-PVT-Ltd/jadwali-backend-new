@@ -358,7 +358,7 @@ exports.create = async (req, res) => {
     } catch (error) {
       console.log(`Error handling online event creation: ${error}`);
     }
-    const linkForSyncOnlinePlatforms = `${process.env.SERVER_URL}/platform/connect-${platform_name}?user_id=${user_id}`;
+    const linkForSyncOnlinePlatforms = `${process.env.LIVE_SERVER}/platform/connect-${platform_name}?user_id=${user_id}`;
     const platform_meeting_link = google_meet_link
       ? google_meet_link
       : zoom_meeting_link;
@@ -680,7 +680,7 @@ exports.update = async (req, res) => {
 
     eventDetails["location"] = location;
 
-    const linkForSyncOnlinePlatforms = `${process.env.SERVER_URL}/platform/connect-${platform_name}?user_id=${user_id}`;
+    const linkForSyncOnlinePlatforms = `${process.env.LIVE_SERVER}/platform/connect-${platform_name}?user_id=${user_id}`;
 
     const addCalendarLink = createAddToCalendarLink(eventDetails);
 

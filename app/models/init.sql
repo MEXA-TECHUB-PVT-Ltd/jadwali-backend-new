@@ -165,6 +165,7 @@ CREATE TABLE IF NOT EXISTS schedule (
     payment_status BOOLEAN DEFAULT FALSE,
     is_deposit_paid BOOLEAN DEFAULT FALSE,
     -- deposit || complete
+    payment_info jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -287,6 +288,7 @@ CREATE TABLE IF NOT EXISTS temp_schedule_details(
     status TEXT DEFAULT 'pending',
     paid_to_user TEXT DEFAULT 'pending',
     is_deposit_paid BOOLEAN DEFAULT FALSE,
+    tran_remaining_amount DECIMAL(10, 2),
     -- deposit || complete
     tran_ref VARCHAR(255),
     merchant_id INT,
@@ -307,3 +309,24 @@ CREATE TABLE IF NOT EXISTS temp_schedule_details(
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS features(
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS subscription_plan(
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS selected_features(
+    id SERIAL PRIMARY KEY,
+    subscription_plan_id INT NOT NULL REFERENCES subscription_plan(id) ON DELETE CASCADE,
+    features_id INT NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+

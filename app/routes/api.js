@@ -21,6 +21,8 @@ const upload = require("./universal/upload");
 const queries = require("./queries/queries");
 const count = require("./universal/count");
 const bank_details = require("./bank_details/bank_details");
+const features = require("./features/features");
+const subscription_plan = require("./subscription_plan/subscription_plan");
 
 
 router.use("/users", users);
@@ -42,6 +44,8 @@ router.use("/universal", upload);
 router.use("/universal", count);
 router.use("/queries", queries);
 router.use("/bank_details", bank_details);
+router.use("/features", features);
+router.use("/subscription_plan", subscription_plan);
 
 
 module.exports = router;
