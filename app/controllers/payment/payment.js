@@ -405,6 +405,11 @@ exports.paymentCallback = async (req, res) => {
         }
 
         await pool.query(
+          "UPDATE schedule SET payment_info = $1 WHERE id = $2 RETURNING *",
+          [body.payment_info, scheduling_id]
+        );
+
+        await pool.query(
           `
             UPDATE temp_schedule_details SET
                 status = $1,
@@ -694,8 +699,8 @@ exports.remainingPaymentCallback = async (req, res) => {
         console.log("Successfully authorized");
         // console.log({ scheduling_id });
         const updatedTemp = await pool.query(
-          `UPDATE temp_schedule_details SET is_deposit_paid = $1 WHERE scheduling_id = $2`,
-          [false, scheduling_id]
+          `UPDATE temp_schedule_details SET is_deposit_paid = $1, tran_remaining_amount = $2 WHERE scheduling_id = $3`,
+          [false, req.body.tran_total, scheduling_id]
         );
         const updatedSch = await pool.query(
           `UPDATE schedule SET is_deposit_paid = $1 WHERE id = $2`,

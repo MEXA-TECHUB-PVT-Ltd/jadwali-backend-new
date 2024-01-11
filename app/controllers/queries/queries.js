@@ -49,13 +49,13 @@ exports.update = async (req, res) => {
   }
 
   if (
-    status !== "connected" &&
+    status !== "contacted" &&
     status !== "dismissed" &&
     status !== "pending"
   ) {
     return res.status(400).json({
       status: false,
-      message: "status must be 'connected' or 'dismissed' or 'pending'",
+      message: "status must be 'contacted' or 'dismissed' or 'pending'",
     });
   }
 
