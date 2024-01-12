@@ -252,8 +252,8 @@ exports.create = async (req, res) => {
       }
     );
 
-    const cancelUrl = `${process.env.CLIENT_URL}/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
-    const rescheduleUrl = `${process.env.CLIENT_URL}/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
+    const cancelUrl = `${process.env.WEBVIEW_URL}/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
+    const rescheduleUrl = `${process.env.WEBVIEW_URL}/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
 
     // Convert scheduling_time to a Date object
     const startDateTime = new Date(scheduling_time);
@@ -324,9 +324,14 @@ exports.create = async (req, res) => {
             userAfterNewTokens,
             eventDetails
           );
+
           await pool.query(
-            "UPDATE schedule SET google_calendar_event_id = $1 RETURNING *",
-            [eventCreationResult.eventData?.id]
+            "UPDATE schedule SET google_calendar_event_id = $1, google_meeting_link = $2 WHERE id = $3 RETURNING *",
+            [
+              eventCreationResult.eventData?.id,
+              eventCreationResult.eventData?.meetLink,
+              scheduling_id,
+            ]
           );
         } else if (platform_name === "zoom") {
           eventCreationResult = await createZoomEvent(
@@ -334,10 +339,11 @@ exports.create = async (req, res) => {
             eventDetails
           );
           await pool.query(
-            "UPDATE schedule SET zoom_meeting_link = $1, zoom_meeting_id = $2 RETURNING *",
+            "UPDATE schedule SET zoom_meeting_link = $1, zoom_meeting_id = $2 WHERE id = $3 RETURNING *",
             [
               eventCreationResult.eventData?.join_url,
               eventCreationResult.eventData?.id,
+              scheduling_id,
             ]
           );
         }
@@ -572,8 +578,10 @@ exports.update = async (req, res) => {
       }
     );
 
-    const cancelUrl = `${process.env.CLIENT_URL}/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
-    const rescheduleUrl = `${process.env.CLIENT_URL}/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
+    const cancelUrl = `${process.env.WEBVIEW_URL
+    }/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
+    const rescheduleUrl = `${process.env.WEBVIEW_URL
+    }/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
 
     let google_meet_link,
       zoom_meeting_link,
@@ -639,6 +647,11 @@ exports.update = async (req, res) => {
           eventDetails
         );
         google_meet_link = calendarEvent?.meetLink;
+
+        await pool.query(
+          "UPDATE schedule SET google_calendar_event_id = $1, google_meeting_link = $2 RETURNING *",
+          [calendarEvent.eventData?.id, google_meet_link, schedule_id]
+        );
         //  google_calendar_event_id = calendarEvent?.eventData?.id;
 
         console.log("Google Calendar event updated successfully");

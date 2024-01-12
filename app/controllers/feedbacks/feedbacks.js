@@ -1,7 +1,7 @@
 const { pool } = require("../../config/db.config");
 
 exports.add = async (req, res) => {
-  const { user_id, comment } = req.body;
+  const { user_id, comment, rating } = req.body;
 
   if (!user_id || !comment) {
     return res.status(400).json({
@@ -22,11 +22,11 @@ exports.add = async (req, res) => {
       });
     }
     const query = `
-      INSERT INTO feedbacks (user_id, comment)
-      VALUES ($1, $2)
-      RETURNING id, user_id, comment, created_at, updated_at;
+      INSERT INTO feedbacks (user_id, comment, rating)
+      VALUES ($1, $2, $3)
+      RETURNING *;
     `;
-    const result = await pool.query(query, [user_id, comment]);
+    const result = await pool.query(query, [user_id, comment, rating]);
 
     if (result.rowCount < 1) {
       return res.status(500).json({
@@ -49,7 +49,7 @@ exports.add = async (req, res) => {
 };
 
 exports.update = async (req, res) => {
-  const { id, user_id, comment } = req.body;
+  const { id, user_id, comment, rating } = req.body;
 
   if (!id || !comment || !user_id) {
     return res.status(400).json({
@@ -84,12 +84,12 @@ exports.update = async (req, res) => {
 
     const query = `
       UPDATE feedbacks
-      SET comment = $3, updated_at = NOW()
+      SET comment = $3, rating = $4, updated_at = NOW()
       WHERE id = $1 AND user_id = $2
-      RETURNING id, user_id, comment, created_at, updated_at;
+      RETURNING *;
     `;
 
-    const result = await pool.query(query, [id, user_id, comment]);
+    const result = await pool.query(query, [id, user_id, comment, rating]);
 
     return res.status(200).json({
       status: true,
