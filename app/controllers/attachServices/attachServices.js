@@ -104,28 +104,36 @@ exports.update = async (req, res) => {
       });
     }
 
-    const query = `
-      WITH updated_service AS (
-        UPDATE attach_services
-        SET service_id = $2, updated_at = NOW()
-        WHERE id = $1 AND user_id = $3
-        RETURNING *
-      )
-      SELECT us.*, s.name as service_name
-      FROM updated_service us
-      JOIN services s ON us.service_id = s.id;
-    `;
+    // Delete the existing attach_service record
+    await pool.query(
+      "DELETE FROM attach_services WHERE id = $1 AND user_id = $2",
+      [attach_service_id, user_id]
+    );
 
-    const result = await pool.query(query, [
-      attach_service_id,
+    // Insert a new attach_service record
+    const insertQuery = `
+      INSERT INTO attach_services (service_id, user_id, created_at, updated_at)
+      VALUES ($1, $2, NOW(), NOW())
+      RETURNING *;
+    `;
+    const newAttachService = await pool.query(insertQuery, [
       service_id,
       user_id,
     ]);
 
+    // Retrieve the service name
+    const serviceInfo = await pool.query(
+      "SELECT name FROM services WHERE id = $1",
+      [service_id]
+    );
+
     return res.status(200).json({
       status: true,
       message: "User Service updated successfully.",
-      data: result.rows[0],
+      data: {
+        ...newAttachService.rows[0],
+        service_name: serviceInfo.rows[0]?.name,
+      },
     });
   } catch (error) {
     return res.status(500).json({
@@ -134,6 +142,7 @@ exports.update = async (req, res) => {
     });
   }
 };
+
 exports.get = async (req, res) => {
   const { id } = req.params;
 

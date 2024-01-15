@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS schedule (
     cancellation_reason TEXT,
     rescheduled_reason TEXT,
     google_calendar_event_id TEXT,
+    google_meeting_link TEXT,
     zoom_meeting_id TEXT,
     zoom_meeting_link TEXT,
     status VARCHAR(50) DEFAULT 'pending',
@@ -196,6 +197,7 @@ CREATE TABLE IF NOT EXISTS feedbacks(
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     comment TEXT,
+    rating INT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );

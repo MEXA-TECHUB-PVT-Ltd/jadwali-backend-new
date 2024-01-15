@@ -41,7 +41,7 @@ exports.connectGoogle = async (req, res) => {
   const { user_id } = req.query;
   const findUser = await pool.query("SELECT * FROM users WHERE id = $1", [
     user_id,
-  ]);
+  ]); 
 
   if (findUser.rowCount === 0) {
     return res.status(404).json({ status: false, message: "User not found" });
