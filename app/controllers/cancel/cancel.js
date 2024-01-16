@@ -23,10 +23,10 @@ exports.scheduleEvent = async (req, res) => {
     scheduling_time,
   } = req.body;
 
-  if (!reason || !scheduling_id || !platform_name || !type) {
+  if (!reason || !scheduling_id || !type) {
     return res.status(400).json({
       status: false,
-      message: "scheduling_id, platform_name, type & Reason is required",
+      message: "scheduling_id, type & Reason is required",
     });
   }
 
@@ -73,24 +73,26 @@ exports.scheduleEvent = async (req, res) => {
     const zoom_expiry_at = user.rows[0].zoom_expiry_at;
     const currentTime = new Date();
 
-    try {
-      if (platform_name === "google") {
-        // Check if Google token has expired
-        if (new Date(google_expiry_at) <= currentTime) {
-          await refreshGoogleAccessToken(user_id);
-        } else {
-          console.log("Google token still valid, no need to refresh");
+    if (type === "online") {
+      try {
+        if (platform_name === "google") {
+          // Check if Google token has expired
+          if (new Date(google_expiry_at) <= currentTime) {
+            await refreshGoogleAccessToken(user_id);
+          } else {
+            console.log("Google token still valid, no need to refresh");
+          }
+        } else if (platform_name === "zoom") {
+          // Check if Zoom token has expired
+          if (new Date(zoom_expiry_at) <= currentTime) {
+            await refreshZoomAccessToken(user_id);
+          } else {
+            console.log("Zoom token still valid, no need to refresh");
+          }
         }
-      } else if (platform_name === "zoom") {
-        // Check if Zoom token has expired
-        if (new Date(zoom_expiry_at) <= currentTime) {
-          await refreshZoomAccessToken(user_id);
-        } else {
-          console.log("Zoom token still valid, no need to refresh");
-        }
+      } catch (tokenRefreshError) {
+        console.error("Token refresh failed:", tokenRefreshError);
       }
-    } catch (tokenRefreshError) {
-      console.error("Token refresh failed:", tokenRefreshError);
     }
 
     // after we inserted the new token we're fetching the user again

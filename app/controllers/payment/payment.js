@@ -41,7 +41,7 @@ exports.paymentCallback = async (req, res) => {
     const body = req.body;
     const { temp_id, invitee_email, invitee_name } = req.query;
 
-    // console.log(body);
+    console.log("Callback url");
 
     const paymentResult = body.payment_result.response_status;
 
@@ -56,6 +56,7 @@ exports.paymentCallback = async (req, res) => {
       `SELECT * FROM temp_schedule_details WHERE id = $1`,
       [temp_id]
     );
+    console.log("well going on ..");
 
     const type = temp_schedule_details.rows[0].type;
     const status = temp_schedule_details.rows[0].status;
@@ -158,6 +159,7 @@ exports.paymentCallback = async (req, res) => {
           .json({ status: false, message: "Voided payments." });
       case "A":
         // 	Authorized payment
+        console.log("well going on ..");
         console.log("Successfully authorized");
 
         // // Store inserted responses with question details
@@ -242,8 +244,10 @@ exports.paymentCallback = async (req, res) => {
           }
         );
 
-        const cancelUrl = `${process.env.CLIENT_URL}/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
-        const rescheduleUrl = `${process.env.CLIENT_URL}/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
+        const cancelUrl = `${process.env.WEBVIEW_URL}/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
+        const rescheduleUrl = `${process.env.WEBVIEW_URL}/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
+
+        console.log("Sending emails::: ", cancelUrl, rescheduleUrl);
 
         // Convert scheduling_time to a Date object
         const startDateTime = new Date(scheduling_time);
@@ -348,7 +352,7 @@ exports.paymentCallback = async (req, res) => {
         } catch (error) {
           console.log(`Error handling online event creation: ${error}`);
         }
-        const linkForSyncOnlinePlatforms = `${process.env.SERVER_URL}/platform/connect-${platform_name}?user_id=${user_id}`;
+        const linkForSyncOnlinePlatforms = `${process.env.LIVE_SERVER}/platform/connect-${platform_name}?user_id=${user_id}`;
         const platform_meeting_link = google_meet_link
           ? google_meet_link
           : zoom_meeting_link;
