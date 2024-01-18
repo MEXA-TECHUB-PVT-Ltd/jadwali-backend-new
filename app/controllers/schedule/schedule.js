@@ -83,8 +83,39 @@ exports.create = async (req, res) => {
         .json({ status: false, message: "User or event not found" });
     }
 
+    const one_to_one = eventCheck.rows[0].one_to_one;
+
+    if (one_to_one) {
+      console.log("One to one event");
+      console.log(selected_time);
+
+      // SQL query to check for existing schedules with the same time
+      const conflictCheckQuery = `
+    SELECT * FROM schedule 
+    WHERE event_id = $1 
+    AND scheduling_time = $2`;
+
+      const conflictCheckResult = await pool.query(conflictCheckQuery, [
+        event_id,
+        scheduling_time,
+      ]);
+
+      console.log("conflictCheckResult: ", conflictCheckResult.rows[0]);
+
+      if (conflictCheckResult.rowCount > 0) {
+        // Conflict found, send an error response
+        return res.status(400).json({
+          status: false,
+          message: "This time slot is already booked.",
+        });
+      }
+
+      // No conflict, proceed with scheduling...
+    }
+
     // ** handling paid events
     if (total_price || deposit_price) {
+      console.log("taking payments");
       // return res.send('hello')
       // Insert scheduling details to database to retrieve it on the callback URL
       const temp_schedule = await pool.query(
@@ -132,6 +163,8 @@ exports.create = async (req, res) => {
 
       const returnUrl = `${process.env.LIVE_SERVER}/payment/return?temp_id=${temp_schedule_id}&invitee_email=${invitee_email}&invitee_name=${invitee_name}`;
 
+      console.log("schedule updated", { callbackUrl, returnUrl });
+
       // paytabs payment
       try {
         const response = await axios.post(
@@ -167,8 +200,8 @@ exports.create = async (req, res) => {
         console.error("Error initiating subscription:", error);
         return res.status(500).send("Failed to initiate subscription");
       }
-    }    
-
+    }
+    console.log("no payments");
 
     // Insert into scheduling table
     const schedulingResult = await insertScheduling(
@@ -254,6 +287,8 @@ exports.create = async (req, res) => {
 
     const cancelUrl = `${process.env.WEBVIEW_URL}/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
     const rescheduleUrl = `${process.env.WEBVIEW_URL}/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
+
+    console.log("Sending emails::: FROM scheduler ", cancelUrl, rescheduleUrl);
 
     // Convert scheduling_time to a Date object
     const startDateTime = new Date(scheduling_time);
@@ -506,10 +541,39 @@ exports.update = async (req, res) => {
     const eventCheck = await pool.query("SELECT * FROM events WHERE id = $1", [
       event_id,
     ]);
+
     if (userCheck.rows.length === 0 || eventCheck.rows.length === 0) {
       return res
         .status(400)
         .json({ status: false, message: "User or event not found" });
+    }
+
+    const one_to_one = eventCheck.rows[0].one_to_one;
+
+    if (one_to_one) {
+
+      // SQL query to check for existing schedules with the same time
+      const conflictCheckQuery = `
+    SELECT * FROM schedule 
+    WHERE event_id = $1 
+    AND scheduling_time = $2`;
+
+      const conflictCheckResult = await pool.query(conflictCheckQuery, [
+        event_id,
+        scheduling_time,
+      ]);
+
+      console.log("conflictCheckResult: ", conflictCheckResult.rows[0]);
+
+      if (conflictCheckResult.rowCount > 0) {
+        // Conflict found, send an error response
+        return res.status(400).json({
+          status: false,
+          message: "This time slot is already booked.",
+        });
+      }
+
+      // No conflict, proceed with scheduling...
     }
 
     const schedule = await pool.query(
@@ -578,10 +642,8 @@ exports.update = async (req, res) => {
       }
     );
 
-    const cancelUrl = `${process.env.WEBVIEW_URL
-    }/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
-    const rescheduleUrl = `${process.env.WEBVIEW_URL
-    }/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
+    const cancelUrl = `${process.env.WEBVIEW_URL}/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
+    const rescheduleUrl = `${process.env.WEBVIEW_URL}/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
 
     let google_meet_link,
       zoom_meeting_link,
@@ -989,14 +1051,13 @@ ORDER BY
   }
 };
 
-
 exports.getTempSchedule = async (req, res) => {
-    const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id, 10);
 
-    try {
-      // Fetch the scheduled event
-      const scheduledEvent = await pool.query(
-        `
+  try {
+    // Fetch the scheduled event
+    const scheduledEvent = await pool.query(
+      `
         SELECT 
     temp.*, 
     json_build_object(
@@ -1015,24 +1076,23 @@ LEFT JOIN
 WHERE 
     temp.id = $1;
         `,
-        [id]
-      );
-      if (scheduledEvent.rowCount === 0) {
-        return res
-          .status(404)
-          .json({ status: false, message: "Scheduled event not found" });
-      }
-      res.json({
-        status: true,
-        message: "Scheduled event retrieved successfully",
-        result: scheduledEvent.rows[0],
-      });
-    } catch (err) {
-      console.error(err.message);
-      res.status(500).json({ status: false, message: err.message });
+      [id]
+    );
+    if (scheduledEvent.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ status: false, message: "Scheduled event not found" });
     }
-}
-
+    res.json({
+      status: true,
+      message: "Scheduled event retrieved successfully",
+      result: scheduledEvent.rows[0],
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ status: false, message: err.message });
+  }
+};
 
 exports.getAllTempSchedules = async (req, res) => {
   // Pagination parameters

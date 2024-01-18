@@ -122,7 +122,7 @@ exports.create = async (req, res) => {
 
     const result = await pool.query(insertQuery, values);
     const isFree = "free-schedule";
-    const webviewURL = `${process.env.CLIENT_URL}/${isFree}/${usernameSlug}/${slug}`;
+    const webviewURL = `${process.env.WEBVIEW_URL}/${isFree}/${usernameSlug}/${slug}`;
 
     return res.status(201).json({
       status: true,
