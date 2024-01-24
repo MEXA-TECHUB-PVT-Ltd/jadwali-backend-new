@@ -1,7 +1,6 @@
 const { pool } = require("../../config/db.config");
 
 exports.create = async (req, res) => {
-  console.log("Location Callback api hit after payment gateway...\n",req.body);
   const { address, post_code, location, type, platform_name, event_id } =
     req.body;
 

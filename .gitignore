@@ -1,3 +1,20 @@
 # .env 
 node_modules
  
+
+
+
+
+
+
+
+
+
+
+
+
+
+#  <!-- else if (status === "pending") { %>
+#     <h2>Payment Pending</h2>
+#     <p>Your payment is currently being processed. We will notify you once the transaction is complete. If you don't receive a confirmation within a reasonable timeframe, please contact support.</p>
+# <% } -->
