@@ -86,7 +86,7 @@
 <body>
     <div class="card">
         <div class="card-content">
-            <% if (status === "successful") { %>
+            <% if (status === "successful" || status === "pending") { %>
                 <!-- Success Content -->
                 <img src="https://res.cloudinary.com/dxfdrtxi3/image/upload/v1704720764/logopink_j85flx.png" alt="JADWALI" />
                 <h1>You are scheduled</h1>
@@ -110,10 +110,7 @@
 <% } else if (status === "expired") { %>
     <h2>Payment Expired</h2>
     <p>Your payment session has expired due to inactivity. Please start the payment process again. For assistance, feel free to contact our support team.</p>
-<% } else if (status === "pending") { %>
-    <h2>Payment Pending</h2>
-    <p>Your payment is currently being processed. We will notify you once the transaction is complete. If you don't receive a confirmation within a reasonable timeframe, please contact support.</p>
-<% } else if (status === "voided") { %>
+<% }  else if (status === "voided") { %>
     <h2>Payment Voided</h2>
     <p>Your payment has been voided, and no charges have been made. If this was not intended, please contact us to resolve the issue or to attempt the payment again.</p>
 <% } else { %>
@@ -126,3 +123,7 @@
     </div>
 </body>
 </html>
+
+
+
+

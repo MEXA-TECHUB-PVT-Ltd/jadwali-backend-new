@@ -197,7 +197,7 @@ CREATE TABLE IF NOT EXISTS feedbacks(
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     comment TEXT,
-    rating INT,
+    rating DECIMAL(10, 1),
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );

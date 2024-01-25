@@ -1,8 +1,6 @@
 const { pool } = require("../../config/db.config");
 const { generateICSString } = require("../../lib/createICSFile");
 const {
-  setGoogleCalendarEvent,
-  createZoomMeeting,
   updateGoogleCalendarEvent,
   updateZoomMeeting,
 } = require("../../lib/integrateCalendar");
@@ -19,12 +17,6 @@ const {
   createAddToCalendarLink,
   renderEmailData,
 } = require("../../util/emailData");
-const {
-  hostEmailPath,
-  inviteEmailPath,
-  hostRescheduleEmailPath,
-  inviteRescheduleEmailPath,
-} = require("../../util/paths");
 const jwt = require("jsonwebtoken");
 const {
   validateRequestBody,
@@ -60,6 +52,11 @@ exports.create = async (req, res) => {
   const { invitee_email, invitee_name, error } = extractInviteeDetails(
     req.body.responses
   );
+
+
+  console.log({ invitee_email, invitee_name });
+
+  // return res.send('hello')
 
   if (error) {
     return res.status(400).json({ status: false, message: error });
@@ -100,7 +97,6 @@ exports.create = async (req, res) => {
         scheduling_time,
       ]);
 
-      console.log("conflictCheckResult: ", conflictCheckResult.rows[0]);
 
       if (conflictCheckResult.rowCount > 0) {
         // Conflict found, send an error response
@@ -159,11 +155,10 @@ exports.create = async (req, res) => {
         total_price,
         deposit_price,
       };
-      const callbackUrl = `${process.env.LIVE_SERVER}/payment/callback?temp_id=${temp_schedule_id}&invitee_email=${invitee_email}&invitee_name=${invitee_name}`;
+      const callbackUrl = `${process.env.LIVE_SERVER}/payment/callback?invitee_name=${invitee_name}&temp_id=${temp_schedule_id}&invitee_email=${invitee_email}`;
 
       const returnUrl = `${process.env.LIVE_SERVER}/payment/return?temp_id=${temp_schedule_id}&invitee_email=${invitee_email}&invitee_name=${invitee_name}`;
 
-      console.log("schedule updated", { callbackUrl, returnUrl });
 
       // paytabs payment
       try {
@@ -182,6 +177,7 @@ exports.create = async (req, res) => {
             return: returnUrl,
             hide_shipping: true,
             show_save_card: true,
+            user_defined: { udf1: invitee_email },
           },
           {
             headers: {
@@ -201,7 +197,9 @@ exports.create = async (req, res) => {
         return res.status(500).send("Failed to initiate subscription");
       }
     }
-    console.log("no payments");
+
+
+    console.log("I don't have the payment and going to insert in schedule events")
 
     // Insert into scheduling table
     const schedulingResult = await insertScheduling(
@@ -288,7 +286,6 @@ exports.create = async (req, res) => {
     const cancelUrl = `${process.env.WEBVIEW_URL}/cancellations?token=${token_id}&invitee_id=${token_invitee_id}`;
     const rescheduleUrl = `${process.env.WEBVIEW_URL}/rescheduling?token=${token_id}&invitee_id=${token_invitee_id}`;
 
-    console.log("Sending emails::: FROM scheduler ", cancelUrl, rescheduleUrl);
 
     // Convert scheduling_time to a Date object
     const startDateTime = new Date(scheduling_time);
@@ -456,6 +453,8 @@ exports.create = async (req, res) => {
     } catch (sendEmailError) {
       console.error(sendEmailError);
     }
+
+    console.log({ code: "Event scheduled😅😅.", result: schedulingResult.rows[0]})
 
     res.json({
       status: true,

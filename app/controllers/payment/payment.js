@@ -39,24 +39,28 @@ function getSessionData(sessionStore, sessionID) {
 exports.paymentCallback = async (req, res) => {
   try {
     const body = req.body;
-    const { temp_id, invitee_email, invitee_name } = req.query;
+    const { temp_id, invitee_name } = req.query;
 
-    console.log("Callback url");
+    console.log("Request Query:::: ", req.query);
+    console.log("Request Body:::: ", req.body);
+    const invitee_email = body?.user_defined?.udf1;
+
+    console.log({ query: { temp_id, invitee_email, invitee_name } });
 
     const paymentResult = body.payment_result.response_status;
 
-    if (!temp_id) {
+    if (!temp_id || !invitee_name) {
       console.log("Temp schedule details Id is required");
-      // return res.status(404).json({
-      //   status: false,
-      //   message: "Temp schedule details Id is required",
-      // });
+      return res.status(404).json({
+        status: false,
+        message:
+          "Temp schedule details Id is required, invitee_email, invitee_name",
+      });
     }
     const temp_schedule_details = await pool.query(
       `SELECT * FROM temp_schedule_details WHERE id = $1`,
       [temp_id]
     );
-    console.log("well going on ..");
 
     const type = temp_schedule_details.rows[0].type;
     const status = temp_schedule_details.rows[0].status;
@@ -72,95 +76,105 @@ exports.paymentCallback = async (req, res) => {
     const is_deposit_paid =
       body?.tran_total === deposit_price + ".00" ? true : false;
 
-    console.log({
-      is_deposit_paid,
-      deposit_price,
-      tran_total: body.tran_total,
-    });
-
     // insertPaymentDetails(user_id, event_id, body);
     // // Insert into scheduling table
-    const schedulingResult = await pool.query(
-      "INSERT INTO schedule(event_id, user_id, scheduling_time, status, payment_status, is_deposit_paid) VALUES($1, $2, $3, $4, $5, $6) RETURNING *",
-      [event_id, user_id, scheduling_time, "scheduled", true, is_deposit_paid]
-    );
-
-    const userCheck = await pool.query("SELECT * FROM users WHERE id = $1", [
-      user_id,
-    ]);
-    const eventCheck = await pool.query("SELECT * FROM events WHERE id = $1", [
-      event_id,
-    ]);
-
-    const scheduling_id = schedulingResult.rows[0].id;
 
     switch (paymentResult) {
       case "H":
         // 	Hold (Authorised but on hold for further anti-fraud review)
         await pool.query(
-          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $3`,
-          ["hold", scheduling_id, temp_id]
+          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
+          ["hold", temp_id]
         );
         console.log("Payment hold");
         return res.status(200).json({ status: true, message: "Payment hold" });
+        break;
 
       case "D":
         // Declined
         console.log("Payment declined.");
         await pool.query(
-          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
-          ["declined", scheduling_id, temp_id]
+          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
+          ["declined", temp_id]
         );
         return res
           .status(200)
           .json({ status: true, message: "Payment declined." });
+        break;
 
       case "E":
         // Error
         console.log("Error");
         await pool.query(
-          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
-          ["error", scheduling_id, temp_id]
+          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
+          ["error", temp_id]
         );
         return res.status(200).json({ status: false, message: "Error" });
+        break;
 
       case "X":
         // Expired
         console.log("Couldn't able to make payments. Expired!");
         await pool.query(
-          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
-          ["expired", scheduling_id, temp_id]
+          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
+          ["expired", temp_id]
         );
         return res.status(500).json({
           status: false,
           message: "Couldn't able to make payments. Expired!",
         });
+        break;
 
-      case "P":
-        // 	Pending (for refunds)
-        console.log("Pending the payment...");
-        await pool.query(
-          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
-          ["pending", scheduling_id, temp_id]
-        );
-        return res
-          .status(200)
-          .json({ status: false, message: "Pending the payment..." });
+      // case "P":
+      //   // 	Pending (for refunds)
+      //   console.log("Pending the payment...");
+      //   await pool.query(
+      //     `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
+      //     ["pending", scheduling_id, temp_id]
+      //   );
+      //   return res
+      //     .status(200)
+      //     .json({ status: false, message: "Pending the payment..." });
 
       case "V":
         // Voided
         console.log("Voided payments.");
         await pool.query(
-          `UPDATE temp_schedule_details SET status = $1, scheduling_id = $2 WHERE id = $2`,
-          ["voided", scheduling_id, temp_id]
+          `UPDATE temp_schedule_details SET status = $1 WHERE id = $2`,
+          ["voided", temp_id]
         );
         return res
           .status(200)
           .json({ status: false, message: "Voided payments." });
+        break;
+
       case "A":
+      case "P":
         // 	Authorized payment
         console.log("well going on ..");
         console.log("Successfully authorized");
+        const schedulingResult = await pool.query(
+          "INSERT INTO schedule(event_id, user_id, scheduling_time, status, payment_status, is_deposit_paid) VALUES($1, $2, $3, $4, $5, $6) RETURNING *",
+          [
+            event_id,
+            user_id,
+            scheduling_time,
+            "scheduled",
+            true,
+            is_deposit_paid,
+          ]
+        );
+
+        const userCheck = await pool.query(
+          "SELECT * FROM users WHERE id = $1",
+          [user_id]
+        );
+        const eventCheck = await pool.query(
+          "SELECT * FROM events WHERE id = $1",
+          [event_id]
+        );
+
+        const scheduling_id = schedulingResult.rows[0].id;
 
         // // Store inserted responses with question details
         let insertedResponsesWithQuestions = [];
@@ -469,6 +483,7 @@ exports.paymentCallback = async (req, res) => {
           inviteeDetails: insertInvitee.rows[0],
           inviteeScheduled: insertInviteeScheduled.rows[0],
         });
+        break;
 
       default:
         console.log("Couldn't able to make payments.");
@@ -525,6 +540,8 @@ exports.paymentReturn = async (req, res) => {
       createdAt: eventData.created_at,
       updatedAt: eventData.updated_at,
     };
+
+    console.log(eventData.status)
 
     const emailTemplatePath = path.join(
       __dirname,

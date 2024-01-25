@@ -225,7 +225,6 @@ exports.updateZoomMeeting = async (accessToken, meetingId, meetingDetails) => {
         response.status
       );
       const responseText = await response.text(); // Get response as text
-      console.log("Response Text:", responseText);
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
 
@@ -268,7 +267,6 @@ exports.deleteZoomMeeting = async (accessToken, meetingId) => {
         response.status
       );
       const responseText = await response.text(); // Get response as text
-      console.log("Response Text:", responseText);
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
 
