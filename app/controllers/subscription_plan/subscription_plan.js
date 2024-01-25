@@ -64,7 +64,7 @@ exports.update = async (req, res) => {
     // Start transaction
     await pool.query("BEGIN");
 
-    // Update subscription_plan
+    // Update subscription_plan 
     const planQuery = `
       UPDATE subscription_plan
       SET name = $1, price = $2, updated_at = NOW()
