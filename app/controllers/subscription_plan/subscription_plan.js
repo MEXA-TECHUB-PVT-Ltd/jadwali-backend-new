@@ -1,12 +1,12 @@
 const { pool } = require("../../config/db.config");
 
 exports.add = async (req, res) => {
-  const { name, feature_ids } = req.body;
+  const { name, price, feature_ids } = req.body;
 
-  if (!name || !feature_ids || !Array.isArray(feature_ids)) {
+  if (!name ||!price ||  !feature_ids || !Array.isArray(feature_ids)) {
     return res.status(400).json({
       status: false,
-      message: "name and feature_ids (as an array) are required.",
+      message: "name, price and feature_ids (as an array) are required.",
     });
   }
 
@@ -15,8 +15,8 @@ exports.add = async (req, res) => {
     await pool.query("BEGIN");
 
     // Insert into subscription_plan
-    const planQuery = `INSERT INTO subscription_plan (name) VALUES ($1) RETURNING *;`;
-    const planResult = await pool.query(planQuery, [name]);
+    const planQuery = `INSERT INTO subscription_plan (name, price) VALUES ($1, $2) RETURNING *;`;
+    const planResult = await pool.query(planQuery, [name, price]);
 
     if (planResult.rowCount < 1) {
       throw new Error("Error while inserting subscription_plan.");
@@ -51,12 +51,12 @@ exports.add = async (req, res) => {
 
 
 exports.update = async (req, res) => {
-  const { id, name, feature_ids } = req.body;
+  const { id, name, price, feature_ids } = req.body;
 
-  if (!id || !name || !feature_ids || !Array.isArray(feature_ids)) {
+  if (!id || !name || !price || !feature_ids || !Array.isArray(feature_ids)) {
     return res.status(400).json({
       status: false,
-      message: "id, name and feature_ids (as an array) are required.",
+      message: "id, name, price and feature_ids (as an array) are required.",
     });
   }
 
@@ -67,11 +67,11 @@ exports.update = async (req, res) => {
     // Update subscription_plan
     const planQuery = `
       UPDATE subscription_plan
-      SET name = $1, updated_at = NOW()
-      WHERE id = $2
+      SET name = $1, price = $2, updated_at = NOW()
+      WHERE id = $3
       RETURNING *;
     `;
-    const planResult = await pool.query(planQuery, [name, id]);
+    const planResult = await pool.query(planQuery, [name, price, id]);
 
     if (planResult.rowCount < 1) {
       throw new Error("Error while updating subscription_plan.");
