@@ -108,7 +108,6 @@ exports.update = async (req, res) => {
   }
 };
 
-
 exports.getAll = async (req, res) => {
   let { limit = 10, page = 1 } = req.query;
 
@@ -126,10 +125,20 @@ exports.getAll = async (req, res) => {
     const offset = (page - 1) * limit;
 
     const query = `
-      SELECT sp.*, json_agg(json_build_object('feature_id', sf.features_id, 'feature_name', f.name)) AS features
+      SELECT 
+        sp.*, 
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', f.id, 
+              'name', f.name, 
+              'isSelected', CASE WHEN sf.features_id IS NOT NULL THEN true ELSE false END
+            )
+          )
+          FROM features f
+          LEFT JOIN selected_features sf ON f.id = sf.features_id AND sf.subscription_plan_id = sp.id
+        ) AS features
       FROM subscription_plan sp
-      LEFT JOIN selected_features sf ON sp.id = sf.subscription_plan_id
-      LEFT JOIN features f ON sf.features_id = f.id
       GROUP BY sp.id
       ORDER BY sp.created_at DESC
       LIMIT $1 OFFSET $2;
@@ -180,14 +189,21 @@ exports.get = async (req, res) => {
 
   try {
     const query = `
-      SELECT sp.*, 
-        json_agg(json_build_object('feature_id', sf.features_id, 'feature_name', f.name)) AS features
-      FROM subscription_plan sp
-      LEFT JOIN selected_features sf ON sp.id = sf.subscription_plan_id
-      LEFT JOIN features f ON sf.features_id = f.id
-      WHERE sp.id = $1
+      SELECT 
+        sp.*, 
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', f.id, 
+              'name', f.name, 
+              'isSelected', CASE WHEN sf.features_id IS NOT NULL THEN true ELSE false END
+            )
+          )
+          FROM features f
+          LEFT JOIN selected_features sf ON f.id = sf.features_id AND sf.subscription_plan_id = sp.id
+        ) AS features
+      FROM subscription_plan sp WHERE sp.id = $1
       GROUP BY sp.id
-      ORDER BY sp.created_at DESC;
     `;
     const result = await pool.query(query, [id]);
 
