@@ -17,7 +17,7 @@ app.use(express.json());
 
 app.use(express.urlencoded({ extended: true }));
 
-const PORT =3025;
+const PORT =3000;
 // test
 
 app.use(
