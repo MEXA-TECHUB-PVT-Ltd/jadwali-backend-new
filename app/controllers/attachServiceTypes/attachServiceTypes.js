@@ -147,8 +147,8 @@ exports.update = async (req, res) => {
     }
 
     await pool.query(
-      "DELETE FROM attach_service_type WHERE user_id = $1 AND service_id = $2",
-      [user_id, service_id]
+      "DELETE FROM attach_service_type WHERE user_id = $1",
+      [user_id]
     );
 
     const insertValues = uniqueServiceTypeIds

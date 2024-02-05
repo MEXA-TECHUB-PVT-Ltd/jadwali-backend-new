@@ -54,10 +54,6 @@ exports.create = async (req, res) => {
   );
 
 
-  console.log({ invitee_email, invitee_name });
-
-  // return res.send('hello')
-
   if (error) {
     return res.status(400).json({ status: false, message: error });
   }
@@ -110,97 +106,93 @@ exports.create = async (req, res) => {
     }
 
     // ** handling paid events
-    if (total_price || deposit_price) {
-      console.log("taking payments");
-      // return res.send('hello')
-      // Insert scheduling details to database to retrieve it on the callback URL
-      const temp_schedule = await pool.query(
-        `INSERT INTO temp_schedule_details (user_id, event_id,scheduling_time, responses, type, platform_name, address, total_price, deposit_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-        [
-          user_id,
-          event_id,
-          scheduling_time,
-          responses,
-          type,
-          platform_name,
-          address,
-          total_price,
-          deposit_price,
-        ]
-      );
+    // if (total_price || deposit_price) {
+    //   console.log("taking payments");
+    //   // return res.send('hello')
+    //   // Insert scheduling details to database to retrieve it on the callback URL
+    //   const temp_schedule = await pool.query(
+    //     `INSERT INTO temp_schedule_details (user_id, event_id,scheduling_time, responses, type, platform_name, address, total_price, deposit_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    //     [
+    //       user_id,
+    //       event_id,
+    //       scheduling_time,
+    //       responses,
+    //       type,
+    //       platform_name,
+    //       address,
+    //       total_price,
+    //       deposit_price,
+    //     ]
+    //   );
 
-      // get the temp schedule id, send query params to callback, retrieve the data after successful payment to schedule the event
-      const temp_schedule_id = temp_schedule.rows[0].id;
+    //   // get the temp schedule id, send query params to callback, retrieve the data after successful payment to schedule the event
+    //   const temp_schedule_id = temp_schedule.rows[0].id;
 
-      // if registered user is buying event we'll take the deposit price
-      // if non registered user is buying event we take the total price
-      const checkIfInviteeIsUser = await pool.query(
-        `SELECT * FROM users WHERE email = $1`,
-        [invitee_email]
-      );
+    //   // if registered user is buying event we'll take the deposit price
+    //   // if non registered user is buying event we take the total price
+    //   const checkIfInviteeIsUser = await pool.query(
+    //     `SELECT * FROM users WHERE email = $1`,
+    //     [invitee_email]
+    //   );
 
-      const eventPriceOnInviteeUser =
-        checkIfInviteeIsUser.rowCount > 0 ? deposit_price : total_price;
-      // console.log(eventPriceOnInviteeUser);
-      const event_name = eventCheck.rows[0].name;
-      const scheduleDetails = {
-        event_id,
-        user_id,
-        selected_date,
-        selected_time,
-        responses,
-        type,
-        platform_name,
-        address,
-        total_price,
-        deposit_price,
-      };
-      const callbackUrl = `${process.env.LIVE_SERVER}/payment/callback?invitee_name=${invitee_name}&temp_id=${temp_schedule_id}&invitee_email=${invitee_email}`;
+    //   const eventPriceOnInviteeUser =
+    //     checkIfInviteeIsUser.rowCount > 0 ? deposit_price : total_price;
+    //   // console.log(eventPriceOnInviteeUser);
+    //   const event_name = eventCheck.rows[0].name;
+    //   const scheduleDetails = {
+    //     event_id,
+    //     user_id,
+    //     selected_date,
+    //     selected_time,
+    //     responses,
+    //     type,
+    //     platform_name,
+    //     address,
+    //     total_price,
+    //     deposit_price,
+    //   };
+    //   const callbackUrl = `${process.env.LIVE_SERVER}/payment/callback?invitee_name=${invitee_name}&temp_id=${temp_schedule_id}&invitee_email=${invitee_email}`;
 
-      const returnUrl = `${process.env.LIVE_SERVER}/payment/return?temp_id=${temp_schedule_id}&invitee_email=${invitee_email}&invitee_name=${invitee_name}`;
-
-
-      // paytabs payment
-      try {
-        const response = await axios.post(
-          "https://secure-global.paytabs.com/payment/request",
-          {
-            profile_id: process.env.PAYTAB_PROFILE_ID,
-            tran_type: "sale",
-            tran_class: "ecom",
-            cart_id: uuidv4(),
-            cart_description: event_name,
-            cart_currency: "PKR",
-            cart_amount: eventPriceOnInviteeUser,
-            tokenise: 2,
-            callback: callbackUrl,
-            return: returnUrl,
-            hide_shipping: true,
-            show_save_card: true,
-            user_defined: { udf1: invitee_email },
-          },
-          {
-            headers: {
-              Authorization: process.env.PAYTAB_SERVER_KEY,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        // return res.redirect(response?.data?.redirect_url);
-        return res.status(200).json({
-          status: true,
-          result: { redirectUrl: response?.data?.redirect_url },
-        });
-      } catch (error) {
-        console.error("Error initiating subscription:", error);
-        return res.status(500).send("Failed to initiate subscription");
-      }
-    }
+    //   const returnUrl = `${process.env.LIVE_SERVER}/payment/return?temp_id=${temp_schedule_id}&invitee_email=${invitee_email}&invitee_name=${invitee_name}`;
 
 
-    console.log("I don't have the payment and going to insert in schedule events")
+    //   // paytabs payment
+    //   try {
+    //     const response = await axios.post(
+    //       "https://secure-global.paytabs.com/payment/request",
+    //       {
+    //         profile_id: process.env.PAYTAB_PROFILE_ID,
+    //         tran_type: "sale",
+    //         tran_class: "ecom",
+    //         cart_id: uuidv4(),
+    //         cart_description: event_name,
+    //         cart_currency: "PKR",
+    //         cart_amount: eventPriceOnInviteeUser,
+    //         tokenise: 2,
+    //         callback: callbackUrl,
+    //         return: returnUrl,
+    //         hide_shipping: true,
+    //         show_save_card: true,
+    //         user_defined: { udf1: invitee_email },
+    //       },
+    //       {
+    //         headers: {
+    //           Authorization: process.env.PAYTAB_SERVER_KEY,
+    //           "Content-Type": "application/json",
+    //         },
+    //       }
+    //     );
 
+    //     // return res.redirect(response?.data?.redirect_url);
+    //     return res.status(200).json({
+    //       status: true,
+    //       result: { redirectUrl: response?.data?.redirect_url },
+    //     });
+    //   } catch (error) {
+    //     console.error("Error initiating subscription:", error);
+    //     return res.status(500).send("Failed to initiate subscription");
+    //   }
+    // }
     // Insert into scheduling table
     const schedulingResult = await insertScheduling(
       req.body.event_id,

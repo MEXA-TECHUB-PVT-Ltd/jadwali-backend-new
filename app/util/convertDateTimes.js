@@ -4,7 +4,7 @@ exports.convertScheduleDateTime = (timeStr) => {
 
   if (!minutes) {
     minutes = "00";
-  }
+  } 
 
   hours = parseInt(hours);
   if (period.toLowerCase() === "pm" && hours < 12) hours += 12;
