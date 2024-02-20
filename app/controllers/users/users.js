@@ -137,13 +137,17 @@ exports.create = async (req, res) => {
     const newUser = await pool.query(insertQuery, insertValues);
     userId = newUser.rows[0].id;
 
-    const emailHtml = await ejs.renderFile(
-      path.join(__dirname, "..", "..", "templates", "auth", "signup.ejs"),
-      {
-        userName: newUser.name,
-      }
-    );
-    await sendEmail(email, `Welcome Email`, emailHtml);
+    try {
+      const emailHtml = await ejs.renderFile(
+        path.join(__dirname, "..", "..", "templates", "auth", "signup.ejs"),
+        {
+          userName: newUser.name,
+        }
+      );
+      await sendEmail(email, `Welcome Email`, emailHtml);
+    } catch (error) {
+      console.log(error);
+    }
 
     delete newUser.rows[0].password;
     delete newUser.rows[0].otp;
