@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users(
     verify_email BOOLEAN DEFAULT FALSE,
     status TEXT DEFAULT NULL,
     payment TEXT DEFAULT FALSE,
+    slug TEXT,
     is_bank_details BOOLEAN DEFAULT FALSE,
     block_status BOOLEAN DEFAULT FALSE,
     google_access_token TEXT DEFAULT NULL,
@@ -331,5 +332,3 @@ CREATE TABLE IF NOT EXISTS selected_features(
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
-

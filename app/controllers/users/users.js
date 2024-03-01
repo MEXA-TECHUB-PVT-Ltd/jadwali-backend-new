@@ -6,6 +6,8 @@ const ejs = require("ejs");
 const path = require("path");
 const sendEmail = require("../../lib/sendEmail");
 
+const slugify = require("slugify");
+const { generateRandomSuffix } = require("../../util/event");
 exports.create = async (req, res) => {
   const {
     full_name,
@@ -61,18 +63,22 @@ exports.create = async (req, res) => {
       });
     }
 
+    let usernameSlug = slugify(full_name.toLowerCase(), "-");
+    usernameSlug += `-${generateRandomSuffix()}`;
+
     switch (signup_type) {
       case "email":
         // Insert email user logic
         const hashedPassword = await bcrypt.hash(password, 8);
         insertQuery =
-          "INSERT INTO users (full_name, email, password, role, signup_type) VALUES ($1, $2, $3, $4, $5) RETURNING *";
+          "INSERT INTO users (full_name, email, password, role, signup_type, slug) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *";
         insertValues = [
           full_name,
           email,
           hashedPassword,
           userRole,
           signup_type,
+          usernameSlug,
         ];
         break;
       case "google":
@@ -84,13 +90,14 @@ exports.create = async (req, res) => {
         }
 
         insertQuery =
-          "INSERT INTO users (full_name, email, google_access_token, role, signup_type) VALUES ($1, $2, $3, $4, $5) RETURNING *";
+          "INSERT INTO users (full_name, email, google_access_token, role, signup_type) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *";
         insertValues = [
           full_name,
           email,
           google_access_token,
           userRole,
           signup_type,
+          usernameSlug,
         ];
         break;
       case "facebook":
@@ -101,13 +108,14 @@ exports.create = async (req, res) => {
           });
         }
         insertQuery =
-          "INSERT INTO users (full_name, email,facebook_access_token, role, signup_type) VALUES ($1, $2, $3, $4, $5) RETURNING *";
+          "INSERT INTO users (full_name, email,facebook_access_token, role, signup_type, slug) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *";
         insertValues = [
           full_name,
           email,
           facebook_access_token,
           userRole,
           signup_type,
+          usernameSlug,
         ];
         break;
       case "apple":
@@ -118,13 +126,14 @@ exports.create = async (req, res) => {
           });
         }
         insertQuery =
-          "INSERT INTO users (full_name, email, apple_access_token, role, signup_type) VALUES ($1, $2, $3, $4, $5) RETURNING *";
+          "INSERT INTO users (full_name, email, apple_access_token, role, signup_type, slug) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *";
         insertValues = [
           full_name,
           email,
           apple_access_token,
           userRole,
           signup_type,
+          usernameSlug,
         ];
         break;
       default:
@@ -652,6 +661,99 @@ GROUP BY
       return res.status(404).json({
         status: false,
         message: "User not found",
+      });
+    }
+
+    const user = result.rows[0];
+
+    return res.status(200).json({
+      status: true,
+      message: "User details fetched successfully",
+      user,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.getAllDetailsBySlug = async (req, res) => {
+  const slug = req.params.slug;
+
+  try {
+    const userDetailsQuery = `
+SELECT 
+  u.*,
+  json_build_object(
+    'filename', up.file_name,
+    'filetype', up.file_type,
+    'mimetype', up.mime_type,
+    'created_at', up.created_at,
+    'updated_at', up.updated_at
+  ) AS upload_details,
+  json_agg(
+    json_build_object(
+      'profile_id', ap.id,
+      'profile_name', ap.profile_name,
+      'unique_id', ap.unique_id,
+      'uuid', ap.uuid,
+      'availabilities', (
+        SELECT json_agg(
+          json_build_object(
+            'availability_id', a.id,
+            'day_of_week', a.day_of_week,
+            'is_available', a.is_available,
+            'time_slots', (
+              SELECT json_agg(ts.*)
+              FROM time_slots ts
+              WHERE ts.availability_id = a.id
+            )
+          )
+        )
+        FROM availability a
+        WHERE a.profile_id = ap.id
+      )
+    )
+  ) FILTER (WHERE ap.id IS NOT NULL) AS availability_profiles,
+  json_agg(
+    json_build_object(
+      'event', ev.*,
+      'location', (
+        SELECT json_agg(loc.*)
+        FROM locations loc
+        WHERE loc.event_id = ev.id
+      ),
+      'questions', (
+        SELECT json_agg(q.*)
+        FROM questions q
+        WHERE q.event_id = ev.id
+      )
+    )
+  ) FILTER (WHERE ev.id IS NOT NULL) AS events
+FROM 
+  users u
+LEFT JOIN 
+  availability_profiles ap ON u.id = ap.user_id
+LEFT JOIN 
+  events ev ON u.id = ev.user_id
+LEFT JOIN 
+  uploads up ON u.profile_picture = up.id
+WHERE 
+  u.slug = $1 AND u.deleted_at IS NULL
+GROUP BY 
+  u.id, up.id
+
+    `;
+
+    const result = await pool.query(userDetailsQuery, [slug]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "Profile not found",
       });
     }
 

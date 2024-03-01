@@ -17,6 +17,7 @@ router.get("/getAll", controller.getAll);
 router.get("/getRecentlyDeletedUsers", controller.getRecentlyDeletedUsers);
 router.get("/getByMonthCount", controller.getByMonthAndYearCount);
 router.get("/getAllDetails/:id", controller.getAllDetails);
+router.get("/getAllDetailsBySlug/:slug", controller.getAllDetailsBySlug);
 router.delete("/delete/:id", controller.delete);
 router.delete("/deleteAll", controller.deleteAll);
 
