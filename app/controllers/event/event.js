@@ -7,6 +7,7 @@ const {
 const slugify = require("slugify");
 
 const jwt = require("jsonwebtoken");
+const { generateRandomSuffix } = require("../../util/event");
 
 const createEventToken = (eventId) => {
   return jwt.sign({ eventId }, process.env.JWT_SECRET, { expiresIn: "1h" });
@@ -35,17 +36,6 @@ const getUserEventCount = async (user_id) => {
   const result = await pool.query(query, values);
   return parseInt(result.rows[0].count);
 };
-function generateRandomSuffix() {
-  // Generate a random letter (a-z)
-  const randomChar = String.fromCharCode(97 + Math.floor(Math.random() * 26));
-
-  // Generate a random number (0-99)
-  const randomNumber = Math.floor(Math.random() * 100);
-
-  // Return the combination of random letter and number
-  return `${randomChar}${randomNumber}`;
-}
-
 
 const eventExist = async (event_id) => {
   const query = "SELECT 1 FROM events WHERE id = $1";
