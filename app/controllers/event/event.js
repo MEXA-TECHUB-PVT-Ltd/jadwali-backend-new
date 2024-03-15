@@ -57,15 +57,15 @@ exports.create = async (req, res) => {
     event_price,
     deposit_price,
     description,
-    duration,
     one_to_one,
+    duration_interval,
   } = req.body;
 
   // Validate required fields
-  if (!user_id || !name || !description || !duration) {
+  if (!user_id || !name || !description || !duration_interval) {
     return res.status(400).json({
       status: false,
-      message: "user_id, name, description, duration are required!",
+      message: "user_id, name, description, duration_interval are required!",
     });
   }
 
@@ -97,14 +97,14 @@ exports.create = async (req, res) => {
     }
 
     const insertQuery =
-      "INSERT INTO events (user_id, name, event_price, deposit_price, description, duration, one_to_one, slug, user_slug) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *";
+      "INSERT INTO events (user_id, name, event_price, deposit_price, description, duration_interval, one_to_one, slug, user_slug) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *";
     const values = [
       user_id,
       name,
       event_price,
       deposit_price,
       description,
-      duration,
+      duration_interval,
       one_to_one,
       slug,
       usernameSlug,
@@ -134,7 +134,7 @@ exports.update = async (req, res) => {
     event_price,
     deposit_price,
     description,
-    duration,
+    duration_interval,
     one_to_one,
   } = req.body;
 
@@ -181,9 +181,9 @@ exports.update = async (req, res) => {
       updateQuery += `description = $${paramIndex++}, `;
       updateValues.push(description);
     }
-    if (duration) {
-      updateQuery += `duration = $${paramIndex++}, `;
-      updateValues.push(duration);
+    if (duration_interval) {
+      updateQuery += `duration_interval = $${paramIndex++}, `;
+      updateValues.push(duration_interval);
     }
     if (one_to_one !== undefined) {
       updateQuery += `one_to_one = $${paramIndex++}, `;
