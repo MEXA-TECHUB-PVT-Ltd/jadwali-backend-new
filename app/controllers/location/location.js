@@ -1,7 +1,7 @@
 const { pool } = require("../../config/db.config");
 
 exports.create = async (req, res) => {
-  const { address, post_code, location, type, platform_name, event_id } =
+  const { address, address_note, location, type, platform_name, event_id } =
     req.body;
 
   if (!type || !event_id) {
@@ -43,7 +43,7 @@ exports.create = async (req, res) => {
 
       response = insertOnline.rows[0];
     } else if (type === "physical") {
-      if (!address || !post_code || !location) {
+      if (!address || !address_note || !location) {
         return res.status(400).json({
           status: false,
           message:
@@ -51,8 +51,8 @@ exports.create = async (req, res) => {
         });
       }
       const insertPhysical = await pool.query(
-        "INSERT INTO locations (event_id, address, post_code, location, type) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-        [event_id, address, post_code, location, type]
+        "INSERT INTO locations (event_id, address, address_note, location, type) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+        [event_id, address, address_note, location, type]
       );
       response = insertPhysical.rows[0];
     } else {
@@ -77,7 +77,7 @@ exports.update = async (req, res) => {
   const {
     location_id,
     address,
-    post_code,
+    address_note,
     location,
     type,
     platform_name,
@@ -115,7 +115,7 @@ exports.update = async (req, res) => {
       SET 
         event_id = COALESCE($2, event_id),
         address = COALESCE($3, address),
-        post_code = COALESCE($4, post_code),
+        address_note = COALESCE($4, address_note),
         location = COALESCE($5, location),
         type = COALESCE($6, type),
         platform_name = COALESCE($7, platform_name),
@@ -129,7 +129,7 @@ exports.update = async (req, res) => {
       location_id,
       event_id,
       address,
-      post_code,
+      address_note,
       location,
       type,
       platform_name,

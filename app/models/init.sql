@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS events(
     deposit_price INT,
     description TEXT,
     duration INT,
+    duration_interval INTERVAL,
     one_to_one BOOLEAN NOT NULL DEFAULT FALSE,
     invite_in_type TEXT,
     -- custom date range | into future | availableDays
@@ -132,6 +133,7 @@ CREATE TABLE IF NOT EXISTS locations(
     event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     address TEXT,
     post_code TEXT,
+    address_note TEXT,
     location JSONB,
     type TEXT,
     platform_name TEXT,
