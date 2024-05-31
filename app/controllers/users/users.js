@@ -90,7 +90,7 @@ exports.create = async (req, res) => {
         }
 
         insertQuery =
-          "INSERT INTO users (full_name, email, google_access_token, role, signup_type) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *";
+          "INSERT INTO users (full_name, email, google_access_token, role, signup_type, slug) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *";
         insertValues = [
           full_name,
           email,
