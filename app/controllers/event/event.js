@@ -258,7 +258,25 @@ exports.getUserSpecificEvent = async (req, res) => {
   }
 
   try {
-    const query = "SELECT * FROM events WHERE user_id = $1 AND id = $2";
+    const query = `
+    SELECT 
+    e.*, 
+    json_build_object(
+      'id',  l.id,
+      'address', l.address,
+        'post_code', l.post_code, 
+        'address_note', l.address_note, 
+        'type', l.type, 
+        'platform_name', l.platform_name
+    ) AS location
+FROM 
+    events e
+LEFT JOIN 
+    locations l ON e.id = l.event_id
+WHERE 
+    e.user_id = $1 
+    AND e.id = $2;
+    `;
     const result = await pool.query(query, [user_id, event_id]);
 
     if (result.rows.length === 0) {
