@@ -17,7 +17,7 @@ app.use(express.json());
 
 app.use(express.urlencoded({ extended: true }));
 
-const PORT =3003;
+const PORT = 3003;
 // test
 
 app.use(
@@ -30,8 +30,6 @@ app.use(
 );
 
 app.use("/public", express.static(path.join(__dirname, "public")));
-;
-
 app.use("/api", api);
 
 app.listen(PORT, () => console.log(`Application listening on ${PORT}`));

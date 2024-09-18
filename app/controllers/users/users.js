@@ -784,21 +784,33 @@ exports.delete = async (req, res) => {
   }
 
   try {
-    const userExists = await pool.query(
-      "SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL",
+    // const userExists = await pool.query(
+    //   "SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL",
+    //   [userId]
+    // );
+    // if (userExists.rowCount === 0) {
+    //   return res.status(404).json({
+    //     status: false,
+    //     message: "User not found or already deleted",
+    //   });
+    // }
+
+    // await pool.query(
+    //   "UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1",
+    //   [userId]
+    // );
+
+    const { rowCount } = await pool.query(
+      `DELETE FROM users WHERE id = $1 RETURNING id`,
       [userId]
     );
-    if (userExists.rowCount === 0) {
+
+    if (rowCount === 0) {
       return res.status(404).json({
         status: false,
         message: "User not found or already deleted",
       });
     }
-
-    await pool.query(
-      "UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1",
-      [userId]
-    );
 
     return res.status(200).json({
       status: true,
