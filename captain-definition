@@ -6,7 +6,7 @@
     "COPY package*.json ./",
     "RUN npm install",
     "COPY . .",
-    "EXPOSE 3003",
+    "EXPOSE 3031",
     "CMD [\"npm\", \"start\"]"
   ],
   "caproverOneClickApp": null
